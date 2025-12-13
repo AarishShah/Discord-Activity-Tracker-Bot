@@ -44,10 +44,10 @@ class Tracker(commands.Cog):
             'start_time': datetime.now(timezone.utc),
             'channel_id': channel.id,
             'channel_name': channel.name,
-            'user_name': member.name
+            'user_name': member.display_name
         }
         if not silent:
-            print(f"[Tracker] Session STARTED: {member.name} in {channel.name}")
+            print(f"[Tracker] Session STARTED: {member.display_name} in {channel.name}")
 
     def end_session(self, member, channel, silent=False):
         if member.id in self.active_sessions:
@@ -69,7 +69,7 @@ class Tracker(commands.Cog):
             
             self.append_session(record)
             if not silent:
-                print(f"[Tracker] Session ENDED: {member.name} in {session['channel_name']}. Duration: {round(duration, 2)}s")
+                print(f"[Tracker] Session ENDED: {member.display_name} in {session['channel_name']}. Duration: {round(duration, 2)}s")
             return record
         return None
 
@@ -92,7 +92,7 @@ class Tracker(commands.Cog):
             
             # Custom Log
             prev_dur = f"{record['duration_seconds']}s" if record else "?"
-            print(f"[Tracker] {member.name} hopped from {before.channel.name} to {after.channel.name} (Prev: {prev_dur})")
+            print(f"[Tracker] {member.display_name} hopped from {before.channel.name} to {after.channel.name} (Prev: {prev_dur})")
 
     @commands.command()
     async def stats(self, ctx):
