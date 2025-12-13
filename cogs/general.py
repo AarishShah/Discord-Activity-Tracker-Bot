@@ -17,14 +17,14 @@ class General(commands.Cog):
         utils.update_user(interaction.user.id, _txn)
         await interaction.response.send_message(f"🌑 Status set to **Away**: {reason}")
 
-    @app_commands.command(name="back", description="Clear Away status")
-    async def back(self, interaction: discord.Interaction):
+    @app_commands.command(name="resume", description="Clear Away/Break status and resume activity")
+    async def resume(self, interaction: discord.Interaction):
         def _txn(data):
             data['status'] = 'Active'
             data['status_reason'] = ""
         
         utils.update_user(interaction.user.id, _txn)
-        await interaction.response.send_message("🟢 Welcome back!")
+        await interaction.response.send_message("🟢 Welcome back! Status set to **Active**.")
 
     @app_commands.command(name="bhai-count", description="Check how many times 'bhai' has been used")
     async def bhai_count(self, interaction: discord.Interaction, user: discord.Member = None):
@@ -34,6 +34,35 @@ class General(commands.Cog):
         
         await interaction.response.send_message(f"**{target.display_name}** has said 'bhai' **{count}** times.")
 
+    @app_commands.command(name="help", description="List all available commands")
+    async def help_cmd(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="🤖 Bot Commands", color=discord.Color.green())
+        
+        # Tracker
+        embed.add_field(name="📊 Tracker", value=(
+            "`/statistic [user] [date] [month]` - View activity stats\n"
+            "`/leaderboard [month] [sort]` - View top users by voice time"
+        ), inline=False)
+        
+        # Attendance
+        embed.add_field(name="📅 Attendance", value=(
+            "`/present` - Mark present\n"
+            "`/halfday [type]` - Mark half-day (Late Join/Early Leave)\n"
+            "`/lunch` - Start lunch break\n"
+            "`/absent [reason] [date]` - Mark absent (default today)\n"
+            "`/drop` - End day (Sign out)"
+        ), inline=False)
+        
+        # General
+        embed.add_field(name="⚙️ General", value=(
+            "`/away [reason]` - Set status to Away\n"
+            "`/resume` - Resume activity (Active)\n"
+            "`/bhai-count [user]` - Check 'bhai' count\n"
+            "`/cls [limit]` - Clear bot messages"
+        ), inline=False)
+        
+        await interaction.response.send_message(embed=embed)
+    
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
@@ -52,10 +81,12 @@ class General(commands.Cog):
                 data = utils.get_user(user.id)
                 if data:
                     status = data.get('status')
-                    if status in ['Away', 'Leave']:
+                    if status in ['Away', 'Leave', 'Break']:
                         reason = data.get('status_reason', 'No reason provided')
                         if status == 'Leave':
-                            await message.channel.send(f"⚠️ **{user.display_name}** is on leave: {reason}")
+                            await message.channel.send(f"⚠️ **{user.display_name}** is absent: {reason}")
+                        elif status == 'Break':
+                            await message.channel.send(f"🍔 **{user.display_name}** is on break: {reason}")
                         else:
                             await message.channel.send(f"⚠️ **{user.display_name}** is currently away: {reason}")
     

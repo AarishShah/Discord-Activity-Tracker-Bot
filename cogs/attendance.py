@@ -57,8 +57,8 @@ class Attendance(commands.Cog):
 
     @app_commands.command(name="halfday", description="Mark today as half-day")
     @app_commands.choices(half_type=[
-        app_commands.Choice(name="Joining Mid Day (Late)", value="joining_mid_day"),
-        app_commands.Choice(name="Leaving Mid Day (Early)", value="leaving_mid_day")
+        app_commands.Choice(name="Joining After Mid Day", value="joining_mid_day"),
+        app_commands.Choice(name="Leaving After Mid Day", value="leaving_mid_day")
     ])
     async def halfday(self, interaction: discord.Interaction, half_type: app_commands.Choice[str]):
         now = utils.get_ist_time()
@@ -80,14 +80,14 @@ class Attendance(commands.Cog):
         utils.update_user(interaction.user.id, _txn)
         await interaction.response.send_message(msg)
 
-    @app_commands.command(name="break", description="Start a break")
-    async def break_cmd(self, interaction: discord.Interaction):
-        # User requested to use /back to resume. So this only sets Break.
+    @app_commands.command(name="lunch", description="Start lunch break")
+    async def lunch(self, interaction: discord.Interaction):
+        # User requested to use /resume to resume. So this only sets Break.
         msg = ""
         def _txn(data):
             nonlocal msg
             data['status'] = 'Break'
-            msg = "Enjoy your meal! 🍔 Status set to **Break**. Use `/back` to resume."
+            msg = "Enjoy your meal! 🍔 Status set to **Break**. Use `/resume` to resume."
         
         utils.update_user(interaction.user.id, _txn)
         await interaction.response.send_message(msg)
@@ -103,28 +103,41 @@ class Attendance(commands.Cog):
         utils.update_user(interaction.user.id, _txn)
         await interaction.response.send_message(msg)
 
-    @app_commands.command(name="leave", description="Mark yourself on leave")
-    @app_commands.describe(reason="Reason for leave (e.g. Vacation, Sick)")
-    async def leave(self, interaction: discord.Interaction, reason: str = "On Leave"):
-        # Request leave for today
+    @app_commands.command(name="absent", description="Mark yourself absent")
+    @app_commands.describe(reason="Reason for absence", date="Date of absence (YYYY-MM-DD, default: Today)")
+    async def absent(self, interaction: discord.Interaction, reason: str = "Absent", date: str = None):
+        # Request leave for specific date or today
         now = utils.get_ist_time()
         msg = ""
+        target_date_str = ""
+        
+        if date:
+             try:
+                d = datetime.strptime(date, '%Y-%m-%d').date()
+                target_date_str = date
+             except ValueError:
+                await interaction.response.send_message("❌ Invalid date. Use YYYY-MM-DD", ephemeral=True)
+                return
+        else:
+             target_date_str = now.strftime('%Y-%m-%d')
+        
+
         def _txn(data):
             nonlocal msg
-            today_str = now.strftime('%Y-%m-%d')
             
-            # Update global status for Auto-Reply
-            data['status'] = 'Leave'
-            data['status_reason'] = reason
+            # Update global status for Auto-Reply ONLY if it is today
+            if target_date_str == now.strftime('%Y-%m-%d'):
+                data['status'] = 'Leave'
+                data['status_reason'] = reason
 
             # Append to Attendance Record
             data['attendance'].append({
-                "date": today_str,
+                "date": target_date_str,
                 "marked_at": now.isoformat(),
                 "type": "leave",
                 "reason": reason
             })
-            msg = f"✅ Marked as **On Leave**: {reason}"
+            msg = f"✅ Marked as **Absent** on {target_date_str}: {reason}"
 
         utils.update_user(interaction.user.id, _txn)
         await interaction.response.send_message(msg)

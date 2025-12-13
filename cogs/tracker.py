@@ -96,12 +96,9 @@ class Tracker(commands.Cog):
             prev_dur = f"{record['duration_seconds']}s" if record else "?"
             print(f"[Tracker] {member.display_name} hopped from {before.channel.name} to {after.channel.name} (Prev: {prev_dur})")
 
-    @commands.command()
-    async def stats(self, ctx):
-        """Shows active session count."""
-        await ctx.send(f"📊 **Tracking Stats**\nActive Voice Sessions: {len(self.active_sessions)}")
 
-    def get_daily_stats(self, user_id, date_str):
+
+
         """
         Aggregates session data for a given user on a specific date (IST).
         date_str: 'YYYY-MM-DD'
@@ -148,66 +145,278 @@ class Tracker(commands.Cog):
             "channel_stats": channel_stats
         }
 
-    @app_commands.command(name="statistic", description="Get activity stats for a user on a specific date")
-    @app_commands.describe(user="The user to view stats for", date="Date (YYYY-MM-DD). Defaults to today.")
-    async def statistic(self, interaction: discord.Interaction, user: discord.Member, date: str = None):
-        # 1. Determine Date
-        if date is None:
-            date_obj = utils.get_ist_time().date()
-            date_str = date_obj.strftime('%Y-%m-%d')
-        else:
+    def get_stats(self, user_id, start_date, end_date):
+        """
+        Aggregates session data for a given user within a date range (Inclusive).
+        dates are datetime.date objects.
+        """
+        user_id = int(user_id) if user_id else None
+        sessions = []
+        if os.path.exists(SESSION_FILE):
             try:
-                date_obj = datetime.strptime(date, '%Y-%m-%d').date()
-                date_str = date
-            except ValueError:
-                await interaction.response.send_message("❌ Invalid date format. Please use `YYYY-MM-DD`.", ephemeral=True)
+                with open(SESSION_FILE, 'r') as f:
+                    sessions = json.load(f)
+            except:
+                pass
+
+        total_duration = 0
+        session_count = 0
+        channel_stats = {} # {channel_name: duration}
+
+        for s in sessions:
+            if user_id and s['user_id'] != user_id:
+                continue
+            
+            try:
+                start_dt_utc = datetime.fromisoformat(s['start_time'])
+                start_dt_ist = start_dt_utc.astimezone(utils.IST)
+                s_date = start_dt_ist.date()
+                
+                if start_date <= s_date <= end_date:
+                    dur = s.get('duration_seconds', 0)
+                    total_duration += dur
+                    session_count += 1
+                    
+                    c_name = s.get('channel_name', 'Unknown')
+                    channel_stats[c_name] = channel_stats.get(c_name, 0) + dur
+            except (ValueError, TypeError):
+                continue
+
+        return {
+            "total_duration": total_duration,
+            "session_count": session_count,
+            "channel_stats": channel_stats
+        }
+
+    @app_commands.command(name="statistic", description="Get activity stats")
+    @app_commands.describe(
+        user="Specific user (Optional)", 
+        date="Date (YYYY-MM-DD) (Optional)", 
+        month="Month (YYYY-MM) (Optional)"
+    )
+    async def statistic(self, interaction: discord.Interaction, user: discord.Member = None, date: str = None, month: str = None):
+        # Determine Period
+        start_date = None
+        end_date = None
+        title_date = ""
+
+        today = utils.get_ist_time().date()
+        
+        try:
+            if month:
+                # Month Logic
+                d = datetime.strptime(month, '%Y-%m').date()
+                start_date = d.replace(day=1)
+                # End date is last day of month
+                next_month = d.replace(day=28) + timedelta(days=4)
+                end_date = next_month - timedelta(days=next_month.day)
+                title_date = f"Month: {month}"
+            elif date:
+                # Specific Date Logic
+                d = datetime.strptime(date, '%Y-%m-%d').date()
+                start_date = d
+                end_date = d
+                title_date = date
+            else:
+                # Default: Today
+                start_date = today
+                end_date = today
+                title_date = str(today)
+                
+        except ValueError:
+             await interaction.response.send_message("❌ Invalid format. Date: YYYY-MM-DD, Month: YYYY-MM", ephemeral=True)
+             return
+
+        # Fetch Stats
+        target_users = [user] if user else []
+        
+        # If no user specified, we might need all users. 
+        # For now, let's stick to the requested behavior: 
+        # "if user is None: Fetch stats for all users"
+        # However, listing ALL users in one embed is hard. 
+        # Let's do a summary for all users in the server who have data.
+        
+        if not user:
+            # Aggregate for ALL known users
+            all_sessions = []
+            if os.path.exists(SESSION_FILE):
+                try:
+                    with open(SESSION_FILE, 'r') as f:
+                        all_sessions = json.load(f)
+                except:
+                    pass
+            
+            # {user_id: {total_duration, session_count}}
+            user_stats = {}
+            user_names = {}
+            
+            for s in all_sessions:
+                try:
+                    start_dt_utc = datetime.fromisoformat(s['start_time'])
+                    start_dt_ist = start_dt_utc.astimezone(utils.IST)
+                    s_date = start_dt_ist.date()
+                    
+                    if start_date <= s_date <= end_date:
+                        uid = s['user_id']
+                        dur = s.get('duration_seconds', 0)
+                        
+                        if uid not in user_stats:
+                            user_stats[uid] = {'total_duration': 0, 'session_count': 0}
+                            
+                        user_stats[uid]['total_duration'] += dur
+                        user_stats[uid]['session_count'] += 1
+                        
+                        if 'user_name' in s:
+                            user_names[uid] = s['user_name']
+                except:
+                    continue
+            
+            if not user_stats:
+                await interaction.response.send_message(f"No activity found for **{title_date}**.", ephemeral=True)
                 return
 
-        # 2. Get User Info & Attendance
-        user_data = utils.get_user(user.id)
-        attendance_status = "Not Marked"
-        
-        if user_data and 'attendance' in user_data:
-            for entry in user_data['attendance']:
-                if entry['date'] == date_str:
-                    attendance_status = entry['type'].title()
-                    if entry.get('reason'):
-                        attendance_status += f" ({entry['reason']})"
-                    break
-        
-        # 3. Get Voice Stats
-        stats = self.get_daily_stats(user.id, date_str)
-        
-        # 4. Format Duration
-        def format_duration(seconds):
-            m, s = divmod(int(seconds), 60)
-            h, m = divmod(m, 60)
-            if h > 0:
-                return f"{h}h {m}m"
-            return f"{m}m {s}s"
+            # Prepare list of users
+            sorted_users = sorted(user_stats.items(), key=lambda x: user_names.get(x[0], str(x[0]))) # Sort by name
+            
+            # Chunking (5 users per embed)
+            CHUNK_SIZE = 5
+            chunks = [sorted_users[i:i + CHUNK_SIZE] for i in range(0, len(sorted_users), CHUNK_SIZE)]
+            
+            # Send first chunk
+            first = True
+            for i, chunk in enumerate(chunks):
+                embed = discord.Embed(title=f"📊 Global Statistics ({i+1}/{len(chunks)})", description=f"Activity for **{title_date}**", color=discord.Color.gold())
+                
+                for uid, stats in chunk:
+                    name = user_names.get(uid, f"User {uid}")
+                    time_str = self.format_duration(stats['total_duration'])
+                    count = stats['session_count']
+                    embed.add_field(name=f"👤 {name}", value=f"🎙️ **{count}** Sessions\n⏱️ **{time_str}**", inline=False)
+                
+                if first:
+                    await interaction.response.send_message(embed=embed)
+                    first = False
+                else:
+                    await interaction.followup.send(embed=embed)
+            return
 
-        duration_str = format_duration(stats['total_duration'])
+        # Specific User Stats
+        stats = self.get_stats(user.id, start_date, end_date)
+        duration_str = self.format_duration(stats['total_duration'])
         
-        # 5. Build Embed
         embed = discord.Embed(
             title=f"📊 Statistics for {user.display_name}",
-            description=f"Activity report for **{date_str}**",
+            description=f"Activity for **{title_date}**",
             color=discord.Color.blue()
         )
         
-        embed.add_field(name="📅 Attendance", value=attendance_status, inline=True)
+        # Attendance only relevant for single date
+        if start_date == end_date:
+            user_data = utils.get_user(user.id)
+            attendance_status = "Not Marked"
+            if user_data and 'attendance' in user_data:
+                for entry in user_data['attendance']:
+                    if entry['date'] == str(start_date):
+                        attendance_status = entry['type'].title() + (f" ({entry['reason']})" if entry.get('reason') else "")
+                        break
+            embed.add_field(name="📅 Attendance", value=attendance_status, inline=True)
+
         embed.add_field(name="🎙️ Voice Sessions", value=str(stats['session_count']), inline=True)
         embed.add_field(name="⏱️ Total Voice Time", value=duration_str, inline=True)
         
         if stats['channel_stats']:
             channels_desc = ""
             for name, dur in stats['channel_stats'].items():
-                channels_desc += f"• **{name}**: {format_duration(dur)}\n"
+                channels_desc += f"• **{name}**: {self.format_duration(dur)}\n"
             embed.add_field(name="🔊 Channel Breakdown", value=channels_desc, inline=False)
         else:
             embed.add_field(name="🔊 Channel Breakdown", value="No voice activity recorded.", inline=False)
 
         await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="leaderboard", description="Show top users by voice activity")
+    @app_commands.describe(month="Month (YYYY-MM). Default: Current Month", sort="Sort order (default: Descending)")
+    @app_commands.choices(sort=[
+        app_commands.Choice(name="Descending (Highest First)", value="desc"),
+        app_commands.Choice(name="Ascending (Lowest First)", value="asc")
+    ])
+    async def leaderboard(self, interaction: discord.Interaction, month: str = None, sort: app_commands.Choice[str] = None):
+        # Determine Range
+        today = utils.get_ist_time().date()
+        start_date = today.replace(day=1)
+        next_month = (start_date + timedelta(days=32)).replace(day=1)
+        end_date = next_month - timedelta(days=1)
+        title_text = f"Month: {start_date.strftime('%Y-%m')}"
+
+        if month:
+            try:
+                d = datetime.strptime(month, '%Y-%m').date()
+                start_date = d.replace(day=1)
+                next_month = (d + timedelta(days=32)).replace(day=1)
+                end_date = next_month - timedelta(days=1)
+                title_text = f"Month: {month}"
+            except ValueError:
+                await interaction.response.send_message("❌ Invalid month format. Use YYYY-MM.", ephemeral=True)
+                return
+
+        # 1. Get All Sessions
+        sessions = []
+        if os.path.exists(SESSION_FILE):
+                try:
+                    with open(SESSION_FILE, 'r') as f:
+                        sessions = json.load(f)
+                except:
+                    pass
+
+        # 2. Aggregation {user_id: duration}
+        user_totals = {}
+        # Also need map for ID -> Name
+        user_names = {} 
+
+        for s in sessions:
+            try:
+                start_dt_utc = datetime.fromisoformat(s['start_time'])
+                start_dt_ist = start_dt_utc.astimezone(utils.IST)
+                s_date = start_dt_ist.date()
+                
+                if start_date <= s_date <= end_date:
+                    uid = s['user_id']
+                    dur = s.get('duration_seconds', 0)
+                    user_totals[uid] = user_totals.get(uid, 0) + dur
+                    if 'user_name' in s:
+                        user_names[uid] = s['user_name']
+            except:
+                continue
+        
+        # 3. Sort
+        reverse = True # Default Descending
+        if sort and sort.value == "asc":
+            reverse = False
+            
+        sorted_users = sorted(user_totals.items(), key=lambda item: item[1], reverse=reverse)
+        
+        # 4. Build Embed
+        embed = discord.Embed(title="🏆 Voice Leaderboard", description=f"**{title_text}**", color=discord.Color.gold())
+        
+        desc = ""
+        for i, (uid, total_sec) in enumerate(sorted_users, 1):
+            name = user_names.get(uid, f"User {uid}") # Fallback name
+            time_str = self.format_duration(total_sec)
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"**#{i}**"
+            desc += f"{medal} **{name}**: {time_str}\n"
+        
+        if not desc:
+            desc = "No activity recorded for this period."
+            
+        embed.description += "\n\n" + desc
+        await interaction.response.send_message(embed=embed)
+
+    def format_duration(self, seconds):
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        if h > 0:
+            return f"{h}h {m}m"
+        return f"{m}m {s}s"
 
 async def setup(bot):
     await bot.add_cog(Tracker(bot))
