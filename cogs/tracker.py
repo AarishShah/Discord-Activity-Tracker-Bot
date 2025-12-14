@@ -10,9 +10,9 @@ import utils
 class Tracker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.active_sessions = {} # {member_id: {start_time, channel_id, ..., is_overtime}}
+        self.active_sessions = {} # {member_id: {start_time, channel_id, guild_id, ...}}
         self.daily_col = utils.db['daily_activity']
-        self.overtime_users = set() # {member_id} - Cleared daily? Ideally persisted but assume runtime for now or check check against daily_logs via drop
+        self.overtime_users = set() # {member_id}
     
     def is_user_in_overtime(self, member):
         return member.id in self.overtime_users
@@ -51,6 +51,7 @@ class Tracker(commands.Cog):
         await self.daily_col.update_one(
             {
                 "user_id": record['user_id'],
+                "guild_id": record['guild_id'],
                 "date": date_str
             },
             update_fields,
@@ -63,6 +64,7 @@ class Tracker(commands.Cog):
             'start_time': datetime.now(timezone.utc),
             'channel_id': channel.id,
             'channel_name': channel.name,
+            'guild_id': channel.guild.id,
             'user_name': member.display_name,
             'is_overtime': is_overtime
         }
@@ -83,6 +85,7 @@ class Tracker(commands.Cog):
                 'user_name': session['user_name'],
                 'channel_id': session['channel_id'],
                 'channel_name': session['channel_name'],
+                'guild_id': session['guild_id'],
                 'start_time': start_time.isoformat(),
                 'end_time': end_time.isoformat(),
                 'duration_seconds': round(duration, 2),
@@ -144,15 +147,15 @@ class Tracker(commands.Cog):
 
 
 
-    async def get_stats(self, user_id, start_date, end_date):
+    async def get_stats(self, user_id, start_date, end_date, guild_id):
         """
-        Aggregates session data for a given user within a date range (Inclusive).
-        dates are datetime.date objects.
+        Aggregates session data for a given user within a date range and guild.
         """
         user_id = int(user_id) if user_id else None
         
         # Build Query
         query = {
+            "guild_id": guild_id,
             "date": {
                 "$gte": start_date.strftime('%Y-%m-%d'),
                 "$lte": end_date.strftime('%Y-%m-%d')
@@ -234,9 +237,10 @@ class Tracker(commands.Cog):
         # Let's do a summary for all users in the server who have data.
         
         if not user:
-            # Aggregate for ALL known users
+            # Aggregate for ALL known users in this guild
             # Logic: Group by user_id from daily docs in range
             query = {
+                "guild_id": interaction.guild.id,
                 "date": {
                     "$gte": start_date.strftime('%Y-%m-%d'),
                     "$lte": end_date.strftime('%Y-%m-%d')
@@ -283,14 +287,14 @@ class Tracker(commands.Cog):
                     embed.add_field(name=f"👤 {name}", value=f"🎙️ **{count}** Sessions\n⏱️ **{time_str}**", inline=False)
                 
                 if first:
-                    await interaction.response.send_message(embed=embed)
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
                     first = False
                 else:
-                    await interaction.followup.send(embed=embed)
+                    await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
         # Specific User Stats
-        stats = await self.get_stats(user.id, start_date, end_date)
+        stats = await self.get_stats(user.id, start_date, end_date, interaction.guild.id)
         duration_str = self.format_duration(stats['total_duration'])
         
         embed = discord.Embed(
@@ -321,7 +325,7 @@ class Tracker(commands.Cog):
         else:
             embed.add_field(name="🔊 Channel Breakdown", value="No voice activity recorded.", inline=False)
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="leaderboard", description="Show top users by voice activity")
     @app_commands.describe(month="Month (YYYY-MM). Default: Current Month", sort="Sort order (default: Descending)")
@@ -348,8 +352,9 @@ class Tracker(commands.Cog):
                 await interaction.response.send_message("❌ Invalid month format. Use YYYY-MM.", ephemeral=True)
                 return
 
-        # 1. Get All Docs in Range
+        # 1. Get All Docs in Range for this Guild
         query = {
+            "guild_id": interaction.guild.id,
             "date": {
                 "$gte": start_date.strftime('%Y-%m-%d'),
                 "$lte": end_date.strftime('%Y-%m-%d')
@@ -389,7 +394,7 @@ class Tracker(commands.Cog):
             desc = "No activity recorded for this period."
             
         embed.description += "\n\n" + desc
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     def format_duration(self, seconds):
         m, s = divmod(int(seconds), 60)

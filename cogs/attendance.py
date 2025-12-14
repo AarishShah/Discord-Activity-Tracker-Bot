@@ -16,6 +16,7 @@ class Attendance(commands.Cog):
         # Check if already marked
         existing = await utils.logs_col.find_one({
             "user_id": interaction.user.id,
+            "guild_id": interaction.guild.id,
             "date": today_str
         })
         
@@ -32,6 +33,7 @@ class Attendance(commands.Cog):
         doc = {
             "user_id": interaction.user.id,
             "user_name": interaction.user.display_name,
+            "guild_id": interaction.guild.id,
             "date": today_str,
             "attendance_status": "Present",
             "commands_used": [
@@ -42,8 +44,9 @@ class Attendance(commands.Cog):
             ]
         }
         
+        
         await utils.logs_col.insert_one(doc)
-        await interaction.response.send_message("✅ You have been marked **Present**.")
+        await interaction.response.send_message("✅ You have been marked **Present**.", ephemeral=True)
 
     @app_commands.command(name="halfday", description="Mark today as half-day")
     @app_commands.choices(half_type=[
@@ -57,7 +60,7 @@ class Attendance(commands.Cog):
         
         # Update or Insert
         await utils.logs_col.update_one(
-            {"user_id": interaction.user.id, "date": today_str},
+            {"user_id": interaction.user.id, "guild_id": interaction.guild.id, "date": today_str},
             {
                 "$set": {
                     "attendance_status": type_label,
@@ -73,7 +76,7 @@ class Attendance(commands.Cog):
             },
             upsert=True
         )
-        await interaction.response.send_message(f"✅ Marked **{type_label}**.")
+        await interaction.response.send_message(f"✅ Marked **{type_label}**.", ephemeral=True)
 
     @app_commands.command(name="lunch", description="Start lunch break")
     async def lunch(self, interaction: discord.Interaction):
@@ -81,7 +84,7 @@ class Attendance(commands.Cog):
         today_str = now.strftime('%Y-%m-%d')
         
         res = await utils.logs_col.update_one(
-            {"user_id": interaction.user.id, "date": today_str},
+            {"user_id": interaction.user.id, "guild_id": interaction.guild.id, "date": today_str},
             {
                 "$push": {
                     "commands_used": {
@@ -96,18 +99,20 @@ class Attendance(commands.Cog):
             await interaction.response.send_message("❌ You must mark **Present** first.", ephemeral=True)
             return
             
-        await interaction.response.send_message("🍔 Enjoy your meal! Status set to **Lunch**. Use `/resume` to resume.")
+            return
+            
+        await interaction.response.send_message("🍔 Enjoy your meal! Status set to **Lunch**. Use `/resume` to resume.", ephemeral=True)
 
     @app_commands.command(name="drop", description="Finish the day (Sign out)")
     async def drop(self, interaction: discord.Interaction):
-        await interaction.response.defer() # Defer to prevent timeout
+        await interaction.response.defer(ephemeral=True) # Defer to prevent timeout
         
         try:
             now = utils.get_ist_time()
             today_str = now.strftime('%Y-%m-%d')
             
             # Find doc
-            doc = await utils.logs_col.find_one({"user_id": interaction.user.id, "date": today_str})
+            doc = await utils.logs_col.find_one({"user_id": interaction.user.id, "guild_id": interaction.guild.id, "date": today_str})
             
             if not doc:
                 await interaction.followup.send("❌ No attendance record found for today.")
@@ -178,7 +183,7 @@ class Attendance(commands.Cog):
     @app_commands.command(name="absent", description="Mark yourself absent")
     @app_commands.describe(reason="Reason for absence", date="Date of absence (YYYY-MM-DD)")
     async def absent(self, interaction: discord.Interaction, date: str, reason: str = "Absent"):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         now = utils.get_ist_time()
         
         # Validate Date
@@ -190,13 +195,13 @@ class Attendance(commands.Cog):
             return
             
         # Check if already exists
-        existing = await utils.logs_col.find_one({"user_id": interaction.user.id, "date": target_date_str})
+        existing = await utils.logs_col.find_one({"user_id": interaction.user.id, "guild_id": interaction.guild.id, "date": target_date_str})
         if existing and existing.get('attendance_status') in ['Present', 'Absent', 'joining_mid_day', 'leaving_mid_day']:
              await interaction.followup.send(f"❌ Status already set to **{existing.get('attendance_status')}** for {target_date_str}.")
              return
         
         await utils.logs_col.update_one(
-            {"user_id": interaction.user.id, "date": target_date_str},
+            {"user_id": interaction.user.id, "guild_id": interaction.guild.id, "date": target_date_str},
             {
                 "$set": {
                     "attendance_status": "Absent",
