@@ -135,7 +135,7 @@ class AttendanceService:
              return {"success": False, "message": "You haven't marked **Attendance** today."}
         
         if 'end_time' in present_cmd:
-             return {"success": False, "message": "You have already dropped for today."}
+             return {"success": False, "message": f"You have already dropped for today (Guild: {guild_id})."}
 
         # Calculate Duration
         start_time = datetime.fromisoformat(present_cmd['timestamp'])
@@ -154,7 +154,7 @@ class AttendanceService:
         })
         
         # Trigger Voice Auto-Disconnect
-        await VoiceService.trigger_auto_disconnect(user)
+        await VoiceService.trigger_auto_disconnect(user, guild_id)
         
         return {"success": True, "message": f"Good bye! Day ended. Duration: {round(duration/3600, 2)}h"}
 

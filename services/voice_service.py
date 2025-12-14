@@ -8,12 +8,12 @@ class VoiceService:
     overtime_users = set() # {member_id}
 
     @classmethod
-    def is_user_in_overtime(cls, member_id):
-        return member_id in cls.overtime_users
+    def is_user_in_overtime(cls, member_id, guild_id):
+        return (member_id, guild_id) in cls.overtime_users
 
     @classmethod
     def start_session(cls, member, channel, silent=False):
-        is_overtime = cls.is_user_in_overtime(member.id)
+        is_overtime = cls.is_user_in_overtime(member.id, channel.guild.id)
         
         cls.active_sessions[member.id] = {
             'start_time': datetime.now(timezone.utc),
@@ -78,10 +78,10 @@ class VoiceService:
         return None
 
     @classmethod
-    async def trigger_auto_disconnect(cls, member):
+    async def trigger_auto_disconnect(cls, member, guild_id):
         """Called by AttendanceService when user DROPS."""
-        # 1. Mark user as overtime
-        cls.overtime_users.add(member.id)
+        # 1. Mark user as overtime (scoped to guild)
+        cls.overtime_users.add((member.id, guild_id))
         
         # 2. If in VC, handle the switch
         if member.id in cls.active_sessions:
