@@ -1,7 +1,8 @@
 import discord
 import os
 import asyncio
-import config
+import asyncio
+from config import settings
 from discord.ext import commands
 
 intents = discord.Intents.default()
@@ -31,10 +32,10 @@ async def load_extensions():
 async def main():
     async with bot:
         await load_extensions()
-        if not config.TOKEN:
+        if not settings.TOKEN:
             print("Error: DISCORD_TOKEN not found. Please check your .env file.")
             return
-        await bot.start(config.TOKEN)
+        await bot.start(settings.TOKEN)
 
 if __name__ == '__main__':
     try:
