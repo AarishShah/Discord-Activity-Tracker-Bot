@@ -20,7 +20,12 @@ class Attendance(commands.Cog):
         })
         
         if existing:
-            await interaction.response.send_message("❌ You have already marked attendance for today.", ephemeral=True)
+            # Check if status is already set to something meaningful
+            if existing.get('attendance_status') in ['Present', 'Absent', 'joining_mid_day', 'leaving_mid_day']:
+                 await interaction.response.send_message(f"❌ Status already set to **{existing.get('attendance_status')}** for today.", ephemeral=True)
+                 return
+            
+            await interaction.response.send_message("❌ You have already marked specific attendance for today.", ephemeral=True)
             return
 
         # Create Doc
@@ -166,18 +171,24 @@ class Attendance(commands.Cog):
             await interaction.followup.send(f"❌ An error occurred: {e}")
 
     @app_commands.command(name="absent", description="Mark yourself absent")
-    @app_commands.describe(reason="Reason for absence", date="Date of absence (YYYY-MM-DD, default: Today)")
-    async def absent(self, interaction: discord.Interaction, reason: str = "Absent", date: str = None):
+    @app_commands.describe(reason="Reason for absence", date="Date of absence (YYYY-MM-DD)")
+    async def absent(self, interaction: discord.Interaction, date: str, reason: str = "Absent"):
+        await interaction.response.defer()
         now = utils.get_ist_time()
-        target_date_str = now.strftime('%Y-%m-%d')
         
-        if date:
-             try:
-                d = datetime.strptime(date, '%Y-%m-%d').date()
-                target_date_str = date
-             except ValueError:
-                await interaction.response.send_message("❌ Invalid date. Use YYYY-MM-DD", ephemeral=True)
-                return
+        # Validate Date
+        try:
+            d = datetime.strptime(date, '%Y-%m-%d').date()
+            target_date_str = date
+        except ValueError:
+            await interaction.followup.send("❌ Invalid date. Use YYYY-MM-DD")
+            return
+            
+        # Check if already exists
+        existing = await utils.logs_col.find_one({"user_id": interaction.user.id, "date": target_date_str})
+        if existing and existing.get('attendance_status') in ['Present', 'Absent', 'joining_mid_day', 'leaving_mid_day']:
+             await interaction.followup.send(f"❌ Status already set to **{existing.get('attendance_status')}** for {target_date_str}.")
+             return
         
         await utils.logs_col.update_one(
             {"user_id": interaction.user.id, "date": target_date_str},
@@ -198,7 +209,7 @@ class Attendance(commands.Cog):
             upsert=True
         )
         
-        await interaction.response.send_message(f"✅ Marked as **Absent** on {target_date_str}: {reason}")
+        await interaction.followup.send(f"✅ Marked as **Absent** on {target_date_str}: {reason}")
 
 async def setup(bot):
     await bot.add_cog(Attendance(bot))
