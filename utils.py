@@ -1,43 +1,52 @@
-import json
 import os
 from datetime import datetime
 import pytz
+from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
 
-USER_FILE = 'data/users.json'
+load_dotenv()
+
 IST = pytz.timezone('Asia/Kolkata')
+MONGO_URI = os.getenv('MONGO_URI')
+DB_NAME = os.getenv('DB_NAME', 'discord_activity')
+
+# Global DB Client (initialized lazily or at module level)
+client = AsyncIOMotorClient(MONGO_URI)
+db = client[DB_NAME]
+users_col = db['users']
+logs_col = db['daily_logs']
 
 def get_ist_time():
     return datetime.now(IST)
 
-def load_data():
-    if not os.path.exists(USER_FILE):
-        return {}
-    try:
-        with open(USER_FILE, 'r') as f:
-            return json.load(f)
-    except:
-        return {}
-
-def save_data(data):
-    os.makedirs(os.path.dirname(USER_FILE), exist_ok=True)
-    with open(USER_FILE, 'w') as f:
-        json.dump(data, f, indent=4, default=str)
-
-def update_user(user_id, update_func):
-    data = load_data()
+async def get_user(user_id):
+    """
+    Fetch user data from MongoDB. 
+    Returns dict or None.
+    """
     user_id = str(user_id)
-    if user_id not in data:
-        data[user_id] = {
+    return await users_col.find_one({"_id": user_id})
+
+async def update_user(user_id, update_func):
+    """
+    Atomic-ish update based on function logic.
+    Since we can't easily pass a func to MongoDB, we fetch, apply, and replace.
+    For high concurrency this is not ideal, but sufficient for this bot.
+    """
+    user_id = str(user_id)
+    doc = await users_col.find_one({"_id": user_id})
+    
+    if not doc:
+        doc = {
+            "_id": user_id,
             "bhai_count": 0,
             "status": "Active",
             "status_reason": "",
             "attendance": [] # List of {date, marked_at, type (present/halfday)}
         }
     
-    update_func(data[user_id])
-    save_data(data)
-    return data[user_id]
-
-def get_user(user_id):
-    data = load_data()
-    return data.get(str(user_id))
+    update_func(doc)
+    
+    # Save back
+    await users_col.replace_one({"_id": user_id}, doc, upsert=True)
+    return doc
