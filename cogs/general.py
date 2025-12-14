@@ -122,10 +122,9 @@ class General(commands.Cog):
         
         # Attendance
         embed.add_field(name="📅 Attendance", value=(
-            "`/present` - Mark present\n"
-            "`/halfday [type]` - Mark half-day (Late Join/Early Leave)\n"
+            "`/attendance [status]` - Mark Present or Half-Day\n"
             "`/lunch` - Start lunch break\n"
-            "`/absent [reason] [date]` - Mark absent (default today)\n"
+            "`/absent [date] [reason]` - Mark absent (Future/Today only)\n"
             "`/drop` - End day (Sign out)"
         ), inline=False)
         

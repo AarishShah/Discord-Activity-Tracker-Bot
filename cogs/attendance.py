@@ -8,10 +8,18 @@ class Attendance(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="present", description="Mark yourself as present")
-    async def present(self, interaction: discord.Interaction):
+    @app_commands.command(name="attendance", description="Mark your daily attendance")
+    @app_commands.describe(status="Choose your attendance status")
+    @app_commands.choices(status=[
+        app_commands.Choice(name="Present", value="Present"),
+        app_commands.Choice(name="Half Day (Joining After Mid Day)", value="joining_mid_day"),
+        app_commands.Choice(name="Half Day (Leaving After Mid Day)", value="leaving_mid_day")
+    ])
+    async def attendance(self, interaction: discord.Interaction, status: app_commands.Choice[str]):
         now = utils.get_ist_time()
         today_str = now.strftime('%Y-%m-%d')
+        status_value = status.value
+        status_name = status.name
         
         # Check if already marked
         existing = await utils.logs_col.find_one({
@@ -29,54 +37,34 @@ class Attendance(commands.Cog):
             await interaction.response.send_message("❌ You have already marked specific attendance for today.", ephemeral=True)
             return
 
-        # Create Doc
-        doc = {
-            "user_id": interaction.user.id,
-            "user_name": interaction.user.display_name,
-            "guild_id": interaction.guild.id,
-            "date": today_str,
-            "attendance_status": "Present",
-            "commands_used": [
-                {
-                    "command": "present",
-                    "timestamp": now.isoformat()
-                }
-            ]
+        # Prepare Command Entry
+        command_entry = {
+            "timestamp": now.isoformat()
         }
         
-        
-        await utils.logs_col.insert_one(doc)
-        await interaction.response.send_message("✅ You have been marked **Present**.", ephemeral=True)
+        if status_value == "Present":
+            command_entry["command"] = "present"
+        else:
+            command_entry["command"] = "halfday"
+            command_entry["type"] = status_value
 
-    @app_commands.command(name="halfday", description="Mark today as half-day")
-    @app_commands.choices(half_type=[
-        app_commands.Choice(name="Joining After Mid Day", value="joining_mid_day"),
-        app_commands.Choice(name="Leaving After Mid Day", value="leaving_mid_day")
-    ])
-    async def halfday(self, interaction: discord.Interaction, half_type: app_commands.Choice[str]):
-        now = utils.get_ist_time()
-        today_str = now.strftime('%Y-%m-%d')
-        type_label = half_type.name
-        
-        # Update or Insert
+        # Upsert Doc
         await utils.logs_col.update_one(
             {"user_id": interaction.user.id, "guild_id": interaction.guild.id, "date": today_str},
             {
                 "$set": {
-                    "attendance_status": type_label,
-                    "user_name": interaction.user.display_name
+                    "attendance_status": status_value,
+                    "user_name": interaction.user.display_name,
+                    # Ensure array exists if creating new
                 },
                 "$push": {
-                    "commands_used": {
-                        "command": "halfday",
-                        "type": half_type.value,
-                        "timestamp": now.isoformat()
-                    }
+                    "commands_used": command_entry
                 }
             },
             upsert=True
         )
-        await interaction.response.send_message(f"✅ Marked **{type_label}**.", ephemeral=True)
+        
+        await interaction.response.send_message(f"✅ You have been marked **{status_name}**.", ephemeral=True)
 
     @app_commands.command(name="lunch", description="Start lunch break")
     async def lunch(self, interaction: discord.Interaction):
@@ -193,6 +181,11 @@ class Attendance(commands.Cog):
         except ValueError:
             await interaction.followup.send("❌ Invalid date. Use YYYY-MM-DD")
             return
+            
+        # Block Past Dates
+        if d < now.date():
+             await interaction.followup.send("❌ You cannot mark attendance for past dates.")
+             return
             
         # Check if already exists
         existing = await utils.logs_col.find_one({"user_id": interaction.user.id, "guild_id": interaction.guild.id, "date": target_date_str})
