@@ -10,8 +10,12 @@ import utils
 class Tracker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.active_sessions = {} # {member_id: {start_time, channel_id, ...}}
+        self.active_sessions = {} # {member_id: {start_time, channel_id, ..., is_overtime}}
         self.daily_col = utils.db['daily_activity']
+        self.overtime_users = set() # {member_id} - Cleared daily? Ideally persisted but assume runtime for now or check check against daily_logs via drop
+    
+    def is_user_in_overtime(self, member):
+        return member.id in self.overtime_users
 
     async def append_session(self, record):
         """Append session to daily document."""
@@ -31,28 +35,40 @@ class Tracker(commands.Cog):
         }
         
         # Update/Upsert
+        update_fields = {
+            "$set": {"user_name": record['user_name']},
+            "$push": {"sessions": session_detail}
+        }
+        
+        # Split Duration Logic
+        if record.get('status') == 'overtime':
+             # Only increment overtime_duration
+             update_fields["$inc"] = {"overtime_duration": record['duration_seconds']}
+        else:
+             # Regular session: increment total_duration
+             update_fields["$inc"] = {"total_duration": record['duration_seconds']}
+             
         await self.daily_col.update_one(
             {
                 "user_id": record['user_id'],
                 "date": date_str
             },
-            {
-                "$set": {"user_name": record['user_name']}, # Keep name updated
-                "$inc": {"total_duration": record['duration_seconds']},
-                "$push": {"sessions": session_detail}
-            },
+            update_fields,
             upsert=True
         )
 
     def start_session(self, member, channel, silent=False):
+        is_overtime = self.is_user_in_overtime(member)
         self.active_sessions[member.id] = {
             'start_time': datetime.now(timezone.utc),
             'channel_id': channel.id,
             'channel_name': channel.name,
-            'user_name': member.display_name
+            'user_name': member.display_name,
+            'is_overtime': is_overtime
         }
+        status_msg = " [OVERTIME]" if is_overtime else ""
         if not silent:
-            print(f"[Tracker] Session STARTED: {member.display_name} in {channel.name}")
+            print(f"[Tracker] Session STARTED: {member.display_name} in {channel.name}{status_msg}")
 
     async def end_session(self, member, channel, reason="left", silent=False):
         if member.id in self.active_sessions:
@@ -70,7 +86,9 @@ class Tracker(commands.Cog):
                 'start_time': start_time.isoformat(),
                 'end_time': end_time.isoformat(),
                 'duration_seconds': round(duration, 2),
-                'disconnect': reason
+                'duration_seconds': round(duration, 2),
+                'disconnect': reason,
+                'status': 'overtime' if session.get('is_overtime') else 'regular'
             }
             
             await self.append_session(record)
@@ -99,6 +117,27 @@ class Tracker(commands.Cog):
             # Custom Log
             prev_dur = f"{record['duration_seconds']}s" if record else "?"
             print(f"[Tracker] {member.display_name} hopped from {before.channel.name} to {after.channel.name} (Prev: {prev_dur})")
+
+    async def trigger_auto_disconnect(self, member):
+        """Called when user DROPS but might remain in VC. 
+           Ends current session with 'auto-disconnect' and starts new 'overtime' session."""
+        
+        # 1. Mark user as overtime (memory)
+        self.overtime_users.add(member.id)
+        
+        # 2. If in VC, handle the switch
+        if member.id in self.active_sessions:
+            current_session = self.active_sessions[member.id]
+            channel = member.guild.get_channel(current_session['channel_id'])
+            
+            # End current (regular) session
+            await self.end_session(member, channel, reason="auto-disconnect")
+            
+            # Start new (overtime) session
+            # Since user is 'in' overtime_users set, start_session will pick it up
+            if channel:
+                self.start_session(member, channel, silent=False)
+                print(f"[Tracker] Auto-disconnect triggered for {member.display_name}. Switched to OVERTIME tracking.")
 
 
 

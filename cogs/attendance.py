@@ -162,6 +162,11 @@ class Attendance(commands.Cog):
                     }
                 }
             )
+            # Trigger Auto-Disconnect for Voice Tracker
+            tracker_cog = self.bot.get_cog('Tracker')
+            if tracker_cog:
+                await tracker_cog.trigger_auto_disconnect(interaction.user)
+
             await interaction.followup.send(f"👋 Good bye! Day ended. Duration: {round(duration/3600, 2)}h")
             
         except Exception as e:
