@@ -6,18 +6,23 @@ from utils.time_utils import get_ist_time
 class AttendanceService:
     
     @classmethod
-    async def mark_attendance(cls, user_id, user_name, guild_id, status_value):
+    async def mark_attendance(cls, user_id, user_name, guild_id, status_value, date_str=None):
         now = get_ist_time()
-        today_str = now.strftime('%Y-%m-%d')
+        today_date = now.date()
         
-        # Check existing
-        existing = await AttendanceModel.find_by_date(user_id, guild_id, today_str)
-        if existing:
-            status = existing.get('attendance_status')
-            if status in ['Present', 'Absent', 'joining_mid_day', 'leaving_mid_day']:
-                return {"success": False, "message": f"Status already set to **{status}** for today."}
-            return {"success": False, "message": "You have already marked specific attendance for today."}
-
+        if date_str:
+            try:
+                target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return {"success": False, "message": "Invalid date. Use YYYY-MM-DD"}
+            
+            if target_date < today_date:
+                return {"success": False, "message": "You cannot update attendance for past dates."}
+            
+            target_date_str = date_str
+        else:
+            target_date_str = now.strftime('%Y-%m-%d')
+        
         # Prepare Command Entry
         command_entry = {
             "timestamp": now.isoformat()
@@ -33,7 +38,7 @@ class AttendanceService:
 
         # Update DB
         await AttendanceModel.create_or_update(
-            user_id, guild_id, today_str,
+            user_id, guild_id, target_date_str,
             {
                 "$set": {
                     "attendance_status": status_value,
@@ -42,7 +47,9 @@ class AttendanceService:
                 "$push": {"commands_used": command_entry}
             }
         )
-        return {"success": True, "message": f"You have been marked **{status_name}**."}
+        
+        message_date = f" for {target_date_str}" if date_str else ""
+        return {"success": True, "message": f"You have been marked **{status_name}**{message_date}."}
 
     @classmethod
     async def start_lunch(cls, user_id, guild_id):

@@ -4,12 +4,13 @@ from services.attendance_service import AttendanceService
 class AttendanceController:
     
     @staticmethod
-    async def attendance(interaction: discord.Interaction, status: str):
+    async def attendance(interaction: discord.Interaction, status: str, date: str = None):
         result = await AttendanceService.mark_attendance(
             interaction.user.id,
             interaction.user.display_name,
             interaction.guild.id,
-            status
+            status,
+            date
         )
         emoji = "✅" if result['success'] else "❌"
         await interaction.response.send_message(f"{emoji} {result['message']}", ephemeral=True)

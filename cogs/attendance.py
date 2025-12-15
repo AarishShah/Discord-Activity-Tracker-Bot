@@ -8,14 +8,14 @@ class Attendance(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="attendance", description="Mark your daily attendance")
-    @app_commands.describe(status="Choose your attendance status")
+    @app_commands.describe(status="Choose your attendance status", date="Optional: Date (YYYY-MM-DD)")
     @app_commands.choices(status=[
         app_commands.Choice(name="Present", value="Present"),
         app_commands.Choice(name="Half Day (Joining After Mid Day)", value="joining_mid_day"),
         app_commands.Choice(name="Half Day (Leaving After Mid Day)", value="leaving_mid_day")
     ])
-    async def attendance(self, interaction: discord.Interaction, status: app_commands.Choice[str]):
-        await AttendanceController.attendance(interaction, status.value)
+    async def attendance(self, interaction: discord.Interaction, status: app_commands.Choice[str], date: str = None):
+        await AttendanceController.attendance(interaction, status.value, date)
 
     @app_commands.command(name="lunch", description="Start lunch break")
     async def lunch(self, interaction: discord.Interaction):
