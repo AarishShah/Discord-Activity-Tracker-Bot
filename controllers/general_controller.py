@@ -43,10 +43,9 @@ class GeneralController:
             "`/cls [limit]` - Clear bot messages"
         ), inline=False)
         
-        # Stats
-        embed.add_field(name="📊 Statistics", value=(
-            "`/statistic [user] [date/month]` - View activity stats\n"
-            "`/leaderboard [month]` - View voice leaderboard"
+        # Export
+        embed.add_field(name="📂 Export", value=(
+            "`/csv [start] [end]` - Download Activity Report"
         ), inline=False)
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
