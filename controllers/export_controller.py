@@ -6,7 +6,7 @@ from utils.time_utils import get_ist_time
 class ExportController:
     @staticmethod
     async def download_csv(interaction: discord.Interaction, start_date: str = None, end_date: str = None):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
         
         now = get_ist_time()
         
@@ -34,7 +34,7 @@ class ExportController:
 
         try:
             file = await ExportService.generate_csv_report(interaction.guild, start_date, end_date)
-            await interaction.followup.send(content=f"📊 **Activity Report**\n📅 {start_date} to {end_date}", file=file, ephemeral=True)
+            await interaction.followup.send(content=f"📊 **Activity Report**\n📅 {start_date} to {end_date}", file=file, ephemeral=False)
         except Exception as e:
             print(f"[ExportController] Error: {e}")
             await interaction.followup.send("❌ An error occurred while generating the CSV.", ephemeral=True)
