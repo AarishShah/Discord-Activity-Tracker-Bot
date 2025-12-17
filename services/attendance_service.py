@@ -6,22 +6,11 @@ from utils.time_utils import get_ist_time
 class AttendanceService:
     
     @classmethod
-    async def mark_attendance(cls, user_id, user_name, guild_id, status_value, date_str=None):
+    async def mark_attendance(cls, user_id, user_name, guild_id, status_value):
         now = get_ist_time()
-        today_date = now.date()
         
-        if date_str:
-            try:
-                target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-            except ValueError:
-                return {"success": False, "message": "Invalid date. Use YYYY-MM-DD"}
-            
-            if target_date < today_date:
-                return {"success": False, "message": "You cannot update attendance for past dates."}
-            
-            target_date_str = date_str
-        else:
-            target_date_str = now.strftime('%Y-%m-%d')
+        # Enforce Today Only
+        target_date_str = now.strftime('%Y-%m-%d')
         
         # Prepare Command Entry
         command_entry = {
@@ -48,8 +37,7 @@ class AttendanceService:
             }
         )
         
-        message_date = f" for {target_date_str}" if date_str else ""
-        return {"success": True, "message": f"You have been marked **{status_name}**{message_date}."}
+        return {"success": True, "message": f"You have been marked **{status_name}**."}
 
     @classmethod
     async def start_lunch(cls, user_id, guild_id):
