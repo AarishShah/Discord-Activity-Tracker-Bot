@@ -80,13 +80,53 @@ class GoogleSheetsService:
         # Check/Create Worksheet
         try:
              worksheet = sh.worksheet(month_name)
+             
+             # Logic to align data with existing headers
+             if len(rows) > 0:
+                 input_headers = rows[0]
+                 data_rows = rows[1:]
+                 
+                 # 1. Get Current Sheet Headers
+                 sheet_headers = worksheet.row_values(1)
+                 
+                 # 2. Identify New Headers (preserve order of appearance in input, though input is already sorted)
+                 new_headers = [h for h in input_headers if h not in sheet_headers]
+                 
+                 if new_headers:
+                     # Update Sheet Headers (Append to end)
+                     # We can't just update Row 1 blindly. We append to the next available columns.
+                     current_col_count = len(sheet_headers)
+                     # Calculate range to update. e.g. Start at Col C+1 -> Col F?
+                     # Easier to just update the whole Row 1 with extended list
+                     updated_headers = sheet_headers + new_headers
+                     worksheet.update(range_name='A1', values=[updated_headers])
+                     
+                     # Update local reference
+                     sheet_headers = updated_headers
+                 
+                 # 3. Remap Data Rows to match Sheet Header Order
+                 aligned_rows = []
+                 for row in data_rows:
+                     # Create a map {Header: Value}
+                     # Handle cases where row might be shorter than headers (though unlikely from ExportService)
+                     row_map = {input_headers[i]: row[i] for i in range(min(len(input_headers), len(row)))}
+                     
+                     new_row = []
+                     for header in sheet_headers:
+                         # key is the header text
+                         new_row.append(row_map.get(header, "")) # Default empty if not found
+                     aligned_rows.append(new_row)
+                 
+                 rows = aligned_rows
+
         except gspread.WorksheetNotFound:
              # Create new
              worksheet = sh.add_worksheet(title=month_name, rows=1000, cols=20)
              # Add Headers (First row of input)
-             worksheet.update(range_name='A1', values=[rows[0]])
-             # Remove header from rows to append
-             rows = rows[1:]
+             if len(rows) > 0:
+                worksheet.update(range_name='A1', values=[rows[0]])
+                # Remove header from rows to append
+                rows = rows[1:]
         
         if not rows:
              return {"success": True, "message": "No data to append (only headers)."}
