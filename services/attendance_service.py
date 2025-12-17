@@ -9,6 +9,9 @@ class AttendanceService:
     async def mark_attendance(cls, user_id, user_name, guild_id, status_value):
         now = get_ist_time()
         
+        if now.weekday() >= 5: # Saturday=5, Sunday=6
+             return {"success": False, "message": "Attendance is disabled on weekends (Saturday & Sunday)."}
+
         # Enforce Today Only
         target_date_str = now.strftime('%Y-%m-%d')
         
@@ -166,6 +169,9 @@ class AttendanceService:
              
         if target_date < today_date:
              return {"success": False, "message": "You cannot mark attendance for past dates."}
+
+        if target_date.weekday() >= 5:
+             return {"success": False, "message": f"{date_str} is a weekend. No need to mark absent."}
 
         # Check existing
         existing = await AttendanceModel.find_by_date(user_id, guild_id, date_str)

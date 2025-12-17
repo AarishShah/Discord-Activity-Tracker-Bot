@@ -13,7 +13,11 @@ class VoiceService:
 
     @classmethod
     def start_session(cls, member, channel, silent=False):
-        is_overtime = cls.is_user_in_overtime(member.id, channel.guild.id)
+        # Force Overtime on Weekends
+        if get_ist_time().weekday() >= 5:
+            is_overtime = True
+        else:
+            is_overtime = cls.is_user_in_overtime(member.id, channel.guild.id)
         
         cls.active_sessions[member.id] = {
             'start_time': datetime.now(timezone.utc),
