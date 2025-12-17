@@ -8,7 +8,9 @@ from models.user_model import UserModel
 
 class ExportService:
     @classmethod
-    async def generate_csv_report(cls, guild_id, start_date, end_date):
+    async def generate_csv_report(cls, guild, start_date, end_date):
+        guild_id = guild.id
+        
         # 1. Fetch Data
         attendance_logs = await AttendanceModel.get_logs_in_range(guild_id, start_date, end_date)
         voice_logs = await VoiceModel.get_stats(None, guild_id, start_date, end_date) # user_id=None gets all
@@ -33,15 +35,24 @@ class ExportService:
         all_user_ids = set()
         user_names = {} # {id: name}
         
+        # Add all current guild members (excludes bots)
+        for member in guild.members:
+            if not member.bot:
+                all_user_ids.add(member.id)
+                user_names[member.id] = member.display_name
+        
+        # Also include any users found in logs (in case they left the server)
         for log in attendance_logs:
             uid = log['user_id']
             all_user_ids.add(uid)
-            if 'user_name' in log: user_names[uid] = log['user_name']
+            if uid not in user_names and 'user_name' in log: 
+                user_names[uid] = log['user_name']
             
         for log in voice_logs:
             uid = log['user_id']
             all_user_ids.add(uid)
-            if 'user_name' in log: user_names[uid] = log['user_name']
+            if uid not in user_names and 'user_name' in log:
+                 user_names[uid] = log['user_name']
             
         # Sort users by name (or ID if name missing)
         sorted_users = sorted(list(all_user_ids), key=lambda x: user_names.get(x, str(x)))

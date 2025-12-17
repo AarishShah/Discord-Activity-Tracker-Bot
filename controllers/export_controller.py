@@ -33,7 +33,7 @@ class ExportController:
             return
 
         try:
-            file = await ExportService.generate_csv_report(interaction.guild.id, start_date, end_date)
+            file = await ExportService.generate_csv_report(interaction.guild, start_date, end_date)
             await interaction.followup.send(content=f"📊 **Activity Report**\n📅 {start_date} to {end_date}", file=file, ephemeral=True)
         except Exception as e:
             print(f"[ExportController] Error: {e}")
