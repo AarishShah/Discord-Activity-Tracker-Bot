@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from services.voice_service import VoiceService
 from models.attendance_model import AttendanceModel # Need attendance for stats?
+from models.voice_model import VoiceModel
 from models.user_model import UserModel
 from utils.time_utils import get_ist_time
 from datetime import datetime, timedelta
@@ -24,63 +25,69 @@ class TrackerController:
 
     @staticmethod
     async def today_stats(interaction: discord.Interaction, user: discord.Member = None):
-        target = user or interaction.user
-        now = get_ist_time()
-        today_str = now.strftime('%Y-%m-%d')
-        
-        # 1. Fetch Attendance
-        attendance_log = await AttendanceModel.find_by_date(target.id, interaction.guild.id, today_str)
-        att_status = "Not Marked"
-        if attendance_log:
-             s = attendance_log.get('attendance_status', 'Unknown')
-             r = attendance_log.get('reason', '')
-             att_status = f"{s}" + (f" ({r})" if r else "")
-
-        # 2. Fetch Voice Stats
-        today_date = now.date()
-        voice_data = await VoiceModel.get_stats(target.id, interaction.guild.id, today_str, today_str)
-        
-        total_voice_sec = 0
-        total_overtime_sec = 0
-        
-        if voice_data:
-            doc = voice_data[0]
-            total_voice_sec = doc.get('total_duration', 0)
-            total_overtime_sec = doc.get('overtime_duration', 0)
+        try:
+            await interaction.response.defer(ephemeral=True)
+            target = user or interaction.user
+            now = get_ist_time()
+            today_str = now.strftime('%Y-%m-%d')
             
-            # Add Live Session Duration
-            if target.id in VoiceService.active_sessions:
-                session = VoiceService.active_sessions[target.id]
-                if session['guild_id'] == interaction.guild.id:
-                    # Parse Start Time (ISO stored in dict? No, datetime object in memory)
-                    start_time = session['start_time'] 
-                    current_time = datetime.now(timezone.utc)
-                    live_duration = (current_time - start_time).total_seconds()
-                    
-                    if session['is_overtime']:
-                        total_overtime_sec += live_duration
-                    else:
-                        total_voice_sec += live_duration
+            # 1. Fetch Attendance
+            attendance_log = await AttendanceModel.find_by_date(target.id, interaction.guild.id, today_str)
+            att_status = "Not Marked"
+            if attendance_log:
+                 s = attendance_log.get('attendance_status', 'Unknown')
+                 r = attendance_log.get('reason', '')
+                 att_status = f"{s}" + (f" ({r})" if r else "")
 
-        # 3. Bhai Count
-        from services.general_service import GeneralService
-        bhai_count = await GeneralService.get_bhai_count(target, interaction.guild.id)
-        
-        # 4. Format
-        voice_str = VoiceService.format_duration(total_voice_sec)
-        overtime_str = VoiceService.format_duration(total_overtime_sec)
-        
-        embed = discord.Embed(title=f"📊 Daily Stats for {target.display_name}", description=f"**{today_str}**", color=discord.Color.blue())
-        if target.avatar:
-             embed.set_thumbnail(url=target.avatar.url)
-        elif target.display_avatar:
-             embed.set_thumbnail(url=target.display_avatar.url)
-        
-        embed.add_field(name="📅 Attendance", value=att_status, inline=False)
-        embed.add_field(name="🎙️ Voice Time", value=f"{voice_str}", inline=True)
-        embed.add_field(name="⏳ Overtime", value=f"{overtime_str}", inline=True)
-        embed.add_field(name="🧔 Bhai Count", value=str(bhai_count), inline=True)
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            # 2. Fetch Voice Stats
+            today_date = now.date()
+            voice_data = await VoiceModel.get_stats(target.id, interaction.guild.id, today_str, today_str)
+            
+            total_voice_sec = 0
+            total_overtime_sec = 0
+            
+            if voice_data:
+                doc = voice_data[0]
+                total_voice_sec = doc.get('total_duration', 0)
+                total_overtime_sec = doc.get('overtime_duration', 0)
+                
+                # Add Live Session Duration
+                if target.id in VoiceService.active_sessions:
+                    session = VoiceService.active_sessions[target.id]
+                    if session['guild_id'] == interaction.guild.id:
+                        start_time = session['start_time'] 
+                        current_time = datetime.now(timezone.utc)
+                        live_duration = (current_time - start_time).total_seconds()
+                        
+                        if session['is_overtime']:
+                            total_overtime_sec += live_duration
+                        else:
+                            total_voice_sec += live_duration
+
+            # 3. Bhai Count
+            from services.general_service import GeneralService
+            bhai_count = await GeneralService.get_bhai_count(target, interaction.guild.id)
+            
+            # 4. Format
+            voice_str = VoiceService.format_duration(total_voice_sec)
+            overtime_str = VoiceService.format_duration(total_overtime_sec)
+            
+            embed = discord.Embed(title=f"📊 Daily Stats for {target.display_name}", description=f"**{today_str}**", color=discord.Color.blue())
+            if target.avatar:
+                 embed.set_thumbnail(url=target.avatar.url)
+            elif target.display_avatar:
+                 embed.set_thumbnail(url=target.display_avatar.url)
+            
+            embed.add_field(name="📅 Attendance", value=att_status, inline=False)
+            embed.add_field(name="🎙️ Voice Time", value=f"{voice_str}", inline=True)
+            embed.add_field(name="⏳ Overtime", value=f"{overtime_str}", inline=True)
+            embed.add_field(name="🧔 Bhai Count", value=str(bhai_count), inline=True)
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
 
 
