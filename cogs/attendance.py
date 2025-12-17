@@ -26,8 +26,8 @@ class Attendance(commands.Cog):
         await AttendanceController.drop(interaction)
 
     @app_commands.command(name="absent", description="Mark yourself absent")
-    @app_commands.describe(reason="Reason for absence", date="Date of absence (YYYY-MM-DD)")
-    async def absent(self, interaction: discord.Interaction, date: str, reason: str = "Absent"):
+    @app_commands.describe(reason="Reason for absence", date="Optional: Date of absence (YYYY-MM-DD)")
+    async def absent(self, interaction: discord.Interaction, reason: str = "Absent", date: str = None):
         await AttendanceController.absent(interaction, date, reason)
 
 async def setup(bot):

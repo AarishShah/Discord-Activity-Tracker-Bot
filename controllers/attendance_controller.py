@@ -43,6 +43,12 @@ class AttendanceController:
     @staticmethod
     async def absent(interaction: discord.Interaction, date: str, reason: str):
         await interaction.response.defer(ephemeral=True)
+        
+        # Default to today if date is None
+        if not date:
+            from utils.time_utils import get_ist_time
+            date = get_ist_time().strftime('%Y-%m-%d')
+            
         result = await AttendanceService.mark_absent(
             interaction.user.id,
             interaction.user.display_name,
