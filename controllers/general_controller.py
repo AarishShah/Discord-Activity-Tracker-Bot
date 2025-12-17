@@ -33,6 +33,11 @@ class GeneralController:
             "`/lunch` - Start lunch break\n"
             "`/drop` - End day (Sign out)"
         ), inline=False)
+
+        # Statistics
+        embed.add_field(name="📊 Statistics", value=(
+            "`/today [user]` - View daily stats"
+        ), inline=False)
         
         # General
         embed.add_field(name="⚙️ General", value=(
