@@ -25,10 +25,6 @@ class General(commands.Cog):
     async def help_cmd(self, interaction: discord.Interaction):
         await GeneralController.help_cmd(interaction)
 
-    @app_commands.command(name="cls", description="Clear bot messages")
-    async def cls(self, interaction: discord.Interaction, limit: int = 10):
-        await GeneralController.cls(interaction, limit)
-
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:

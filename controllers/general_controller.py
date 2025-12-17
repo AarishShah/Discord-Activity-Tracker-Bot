@@ -38,8 +38,7 @@ class GeneralController:
         embed.add_field(name="⚙️ General", value=(
             "`/away [reason]` - Set status to Away\n"
             "`/resume` - Resume activity (Active)\n"
-            "`/bhai-count [user]` - Check 'bhai' count\n"
-            "`/cls [limit]` - Clear bot messages"
+            "`/bhai-count [user]` - Check 'bhai' count"
         ), inline=False)
         
         # Export
@@ -48,9 +47,3 @@ class GeneralController:
         ), inline=False)
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @staticmethod
-    async def cls(interaction: discord.Interaction, limit: int):
-        await interaction.response.defer(ephemeral=True)
-        deleted = await interaction.channel.purge(limit=limit, check=lambda m: m.author == interaction.client.user)
-        await interaction.followup.send(f"🧹 Cleared {len(deleted)} messages.", ephemeral=True)
