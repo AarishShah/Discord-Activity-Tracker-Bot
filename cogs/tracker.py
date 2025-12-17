@@ -12,6 +12,11 @@ class Tracker(commands.Cog):
         if member.bot: return
         await TrackerController.on_voice_state_update(member, before, after)
 
+    @app_commands.command(name="today", description="Get daily stats for a user")
+    @app_commands.describe(user="User to check stats for")
+    async def today(self, interaction: discord.Interaction, user: discord.Member = None):
+        await TrackerController.today_stats(interaction, user)
+
 
 async def setup(bot):
     await bot.add_cog(Tracker(bot))
