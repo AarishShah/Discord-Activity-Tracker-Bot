@@ -29,9 +29,8 @@ class GeneralController:
         
         # Attendance
         embed.add_field(name="📅 Attendance", value=(
-            "`/attendance [status]` - Mark Present or Half-Day\n"
+            "`/attendance [status] [date] [reason]` - Mark Present, Half-Day, or Absent\n"
             "`/lunch` - Start lunch break\n"
-            "`/absent [date] [reason]` - Mark absent (Future/Today only)\n"
             "`/drop` - End day (Sign out)"
         ), inline=False)
         

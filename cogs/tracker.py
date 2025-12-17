@@ -13,6 +13,5 @@ class Tracker(commands.Cog):
         await TrackerController.on_voice_state_update(member, before, after)
 
 
-
 async def setup(bot):
     await bot.add_cog(Tracker(bot))

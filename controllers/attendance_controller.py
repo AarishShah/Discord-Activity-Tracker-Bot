@@ -4,7 +4,37 @@ from services.attendance_service import AttendanceService
 class AttendanceController:
     
     @staticmethod
-    async def attendance(interaction: discord.Interaction, status: str):
+    async def attendance(interaction: discord.Interaction, status: str, date: str = None, reason: str = None):
+        # 1. Handle Absent Logic
+        if status == "Absent":
+            await interaction.response.defer(ephemeral=True)
+            
+            # Default to today if date is None
+            if not date:
+                from utils.time_utils import get_ist_time
+                date = get_ist_time().strftime('%Y-%m-%d')
+            
+            # Default reason
+            if not reason:
+                reason = "Absent"
+                
+            result = await AttendanceService.mark_absent(
+                interaction.user.id,
+                interaction.user.display_name,
+                interaction.guild.id,
+                date,
+                reason
+            )
+            emoji = "✅" if result['success'] else "❌"
+            await interaction.followup.send(f"{emoji} {result['message']}")
+            return
+
+        # 2. Handle Present/HalfDay Logic
+        # Validate Date Usage
+        if date:
+             await interaction.response.send_message("❌ Date parameter is only supported for **Absent** status. Present/Half-Day is always for **Today**.", ephemeral=True)
+             return
+
         result = await AttendanceService.mark_attendance(
             interaction.user.id,
             interaction.user.display_name,
@@ -37,23 +67,4 @@ class AttendanceController:
         await interaction.response.defer(ephemeral=True)
         result = await AttendanceService.drop_day(interaction.user, interaction.guild.id)
         emoji = "👋" if result['success'] else "❌"
-        await interaction.followup.send(f"{emoji} {result['message']}")
-
-    @staticmethod
-    async def absent(interaction: discord.Interaction, date: str, reason: str):
-        await interaction.response.defer(ephemeral=True)
-        
-        # Default to today if date is None
-        if not date:
-            from utils.time_utils import get_ist_time
-            date = get_ist_time().strftime('%Y-%m-%d')
-            
-        result = await AttendanceService.mark_absent(
-            interaction.user.id,
-            interaction.user.display_name,
-            interaction.guild.id,
-            date,
-            reason
-        )
-        emoji = "✅" if result['success'] else "❌"
         await interaction.followup.send(f"{emoji} {result['message']}")
