@@ -71,7 +71,12 @@ async def main():
     
     bot = TestBot(intents=intents)
     token = os.getenv("DISCORD_TOKEN")
-    await bot.start(token)
+    try:
+        await bot.start(token)
+    finally:
+        Database.close()
+        # Give aiohttp a moment to close underlying connectors
+        await asyncio.sleep(0.25)
 
 if __name__ == "__main__":
     try:
