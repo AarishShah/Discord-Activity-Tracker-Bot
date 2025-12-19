@@ -2,3 +2,5 @@ discord.py
 python-dotenv
 pytz
 motor
+gspread
+google-auth
