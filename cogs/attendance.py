@@ -7,6 +7,14 @@ class Attendance(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Restriction: Only allow commands in "attendance" channel
+        if interaction.channel and interaction.channel.name == "attendance":
+            return True
+        
+        await interaction.response.send_message("❌ You can only use these commands in the **#attendance** channel.", ephemeral=True)
+        return False
+
     @app_commands.command(name="attendance", description="Mark your daily attendance")
     @app_commands.describe(
         status="Choose your attendance status",
@@ -29,6 +37,14 @@ class Attendance(commands.Cog):
     @app_commands.command(name="drop", description="Finish the day (Sign out)")
     async def drop(self, interaction: discord.Interaction):
         await AttendanceController.drop(interaction)
+
+    @app_commands.command(name="away", description="Set away status")
+    async def away(self, interaction: discord.Interaction, reason: str = "AFK"):
+        await AttendanceController.away(interaction, reason)
+
+    @app_commands.command(name="resume", description="Resume work from break")
+    async def resume(self, interaction: discord.Interaction):
+        await AttendanceController.resume(interaction)
 
 async def setup(bot):
     await bot.add_cog(Attendance(bot))

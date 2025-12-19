@@ -156,7 +156,7 @@ class AttendanceService:
              return {"success": False, "message": "You haven't marked **Attendance** today."}
         
         if 'end_time' in present_cmd:
-             return {"success": False, "message": f"You have already dropped for today (Guild: {guild_id})."}
+             return {"success": False, "message": "You have already dropped for today."}
 
         # Calculate Duration
         start_time = datetime.fromisoformat(present_cmd['timestamp'])
@@ -178,6 +178,50 @@ class AttendanceService:
         await VoiceService.trigger_auto_disconnect(user, guild_id)
         
         return {"success": True, "message": f"Good bye! Day ended. Duration: {round(duration/3600, 2)}h"}
+
+    @classmethod
+    async def auto_drop(cls, user, guild_id):
+        """
+        Forcefully ends the day for a user (Auto-Drop).
+        """
+        now = get_ist_time()
+        today_str = now.strftime('%Y-%m-%d')
+        
+        doc = await AttendanceModel.find_by_date(user.id, guild_id, today_str)
+        if not doc:
+            return {"success": False, "message": "No attendance record found."}
+
+        commands = doc.get('commands_used', [])
+        # Find active Present/Halfday
+        present_cmd = next((c for c in commands if c.get('command') in ['present', 'halfday']), None)
+        
+        if not present_cmd:
+             return {"success": False, "message": "Not marked present."}
+        
+        # If already ended, skip
+        if 'end_time' in present_cmd:
+             return {"success": False, "message": "Already dropped."}
+
+        # Calculate Duration
+        start_time = datetime.fromisoformat(present_cmd['timestamp'])
+        duration = (now - start_time).total_seconds()
+        
+        # Update Present/Halfday
+        await AttendanceModel.update_command(doc['_id'], present_cmd['command'], {
+            "commands_used.$.end_time": now.isoformat(),
+            "commands_used.$.duration": round(duration, 2)
+        })
+        
+        # Push auto-drop command
+        await AttendanceModel.push_command(user.id, guild_id, today_str, {
+            "command": "auto-drop",
+            "timestamp": now.isoformat()
+        })
+        
+        # Trigger Voice Auto-Disconnect
+        await VoiceService.trigger_auto_disconnect(user, guild_id)
+        
+        return {"success": True, "message": f"Auto-dropped {user.display_name}."}
 
     @classmethod
     async def mark_absent(cls, user_id, user_name, guild_id, date_str, reason):

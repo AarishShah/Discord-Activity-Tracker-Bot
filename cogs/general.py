@@ -7,14 +7,15 @@ class General(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="away", description="Set status to Away (AFK)")
-    @app_commands.describe(reason="Reason for being away")
-    async def away(self, interaction: discord.Interaction, reason: str = "AFK"):
-        await GeneralController.away(interaction, reason)
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Restriction: Only allow commands in "attendance" channel
+        if interaction.channel and interaction.channel.name == "attendance":
+            return True
+        
+        await interaction.response.send_message("❌ You can only use these commands in the **#attendance** channel.", ephemeral=True)
+        return False
 
-    @app_commands.command(name="resume", description="Resume work (Back from Lunch/Away)")
-    async def resume(self, interaction: discord.Interaction):
-        await GeneralController.resume(interaction)
+
 
     @app_commands.command(name="bhai-count", description="Check how many times someone has been called 'bhai'")
     @app_commands.describe(user="User to check")

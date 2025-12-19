@@ -12,20 +12,94 @@ from services.export_service import ExportService
 from services.google_sheets_service import GoogleSheetsService
 from datetime import datetime, timedelta
 
-# Auto Absent: 23:30 IST (18:00 UTC)
-TIME_AUTO_ABSENT = time(hour=18, minute=0)
-# Daily Export: 00:30 IST (19:00 UTC)
-TIME_DAILY_EXPORT = time(hour=19, minute=0)
+# Helper to parse Env IST -> UTC time
+import os
+from datetime import datetime, time, timedelta
+
+def get_scheduler_time(env_key, default_ist):
+    ist_str = os.getenv(env_key, default_ist)
+    try:
+        h, m = map(int, ist_str.split(':'))
+        # Convert IST to UTC (-5:30)
+        # Create a dummy datetime to handle day wrap
+        dt = datetime(2000, 1, 1, h, m)
+        utc_dt = dt - timedelta(hours=5, minutes=30)
+        return utc_dt.time()
+    except Exception as e:
+        print(f"[Scheduler] Error parsing {env_key}: {e}. using default.")
+        dt = datetime.strptime(default_ist, "%H:%M") 
+        utc_dt = dt - timedelta(hours=5, minutes=30)
+        return utc_dt.time()
+
+# Auto Absent: 23:30 IST
+TIME_AUTO_ABSENT = get_scheduler_time("ATTENDANCE_AUTO_ABSENT_TIME", "23:30")
+# Daily Export: 00:30 IST
+TIME_DAILY_EXPORT = get_scheduler_time("ATTENDANCE_EXPORT_TIME", "00:30")
+# Auto Drop: Default 22:00 IST ? User didn't specify default, but I'll use 22:00
+TIME_AUTO_DROP = get_scheduler_time("ATTENDANCE_END_TIME", "09:00")
 
 class Scheduler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.auto_absent_task.start()
         self.daily_export_task.start()
+        self.auto_drop_task.start()
 
     def cog_unload(self):
         self.auto_absent_task.cancel()
         self.daily_export_task.cancel()
+        self.auto_drop_task.cancel()
+    
+    @tasks.loop(time=TIME_AUTO_DROP)
+    async def auto_drop_task(self):
+        now = get_ist_time()
+        
+        # Skip Weekends
+        if now.weekday() >= 5:
+            return
+
+        print(f"[Scheduler] Running Auto-Drop for {now.strftime('%Y-%m-%d')}...")
+        
+        for guild in self.bot.guilds:
+            dropped_users = []
+            
+            for member in guild.members:
+                if member.bot: continue
+                
+                try:
+                    # Attempt Auto Drop
+                    result = await AttendanceService.auto_drop(member, guild.id)
+                    if result['success']:
+                        print(f"[Scheduler] {result['message']} (Guild: {guild.name})")
+                        dropped_users.append(member.display_name)
+                except Exception as e:
+                    print(f"[Scheduler] Error auto-dropping {member.display_name}: {e}")
+            
+            # Send Notification if users were dropped
+            if dropped_users:
+                user_list_str = ", ".join(dropped_users)
+                message = f"🕰️ **Auto-Drop Summary**: The following users were auto-dropped: {user_list_str}"
+                
+                # Find Channel
+                channel_id = os.getenv("ATTENDANCE_CHANNEL_ID")
+                channel = None
+                
+                if channel_id:
+                    channel = guild.get_channel(int(channel_id))
+                
+                if not channel:
+                     # Fallback: finding channel by name
+                     channel = discord.utils.get(guild.text_channels, name="general")
+                if not channel:
+                     channel = discord.utils.get(guild.text_channels, name="attendance")
+                     
+                if channel:
+                    try:
+                        await channel.send(message)
+                    except Exception as e:
+                        print(f"[Scheduler] Failed to send log to channel: {e}")
+                else:
+                    print(f"[Scheduler] No channel found to log auto-drops. (Msg: {message})")
 
     @tasks.loop(time=TIME_AUTO_ABSENT)
     async def auto_absent_task(self):
@@ -36,7 +110,7 @@ class Scheduler(commands.Cog):
         if now.weekday() >= 5:
             print(f"[Scheduler] Skipping Auto-Absent for {now.strftime('%Y-%m-%d')} (Weekend).")
             return
-
+ 
         print(f"[Scheduler] Running Auto-Absent for {now.strftime('%Y-%m-%d')}...")
         
         today_str = now.strftime('%Y-%m-%d')
@@ -72,7 +146,6 @@ class Scheduler(commands.Cog):
         now = get_ist_time()
         yesterday = now - timedelta(days=1)
         yesterday_str = yesterday.strftime('%Y-%m-%d')
-        month_name = yesterday.strftime('%B')
         
         for guild in self.bot.guilds:
             # Filter Guild
@@ -97,6 +170,10 @@ class Scheduler(commands.Cog):
 
     @daily_export_task.before_loop
     async def before_daily_export(self):
+        await self.bot.wait_until_ready()
+
+    @auto_drop_task.before_loop
+    async def before_auto_drop(self):
         await self.bot.wait_until_ready()
 
 async def setup(bot):
