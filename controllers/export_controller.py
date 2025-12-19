@@ -26,10 +26,10 @@ class ExportController:
             e_dt = datetime.strptime(end_date, '%Y-%m-%d')
             
             if s_dt > e_dt:
-                await interaction.followup.send("❌ Start date cannot be after End date.", ephemeral=True)
+                await interaction.followup.send("❌ Start date cannot be after End date.", ephemeral=False)
                 return
         except ValueError:
-            await interaction.followup.send("❌ Invalid date format. Please use YYYY-MM-DD.", ephemeral=True)
+            await interaction.followup.send("❌ Invalid date format. Please use YYYY-MM-DD.", ephemeral=False)
             return
 
         try:
@@ -37,7 +37,7 @@ class ExportController:
             await interaction.followup.send(content=f"📊 **Activity Report**\n📅 {start_date} to {end_date}", file=file, ephemeral=False)
         except Exception as e:
             print(f"[ExportController] Error: {e}")
-            await interaction.followup.send("❌ An error occurred while generating the CSV.", ephemeral=True)
+            await interaction.followup.send("❌ An error occurred while generating the CSV.", ephemeral=False)
 
     @staticmethod
     async def export_to_sheets(interaction: discord.Interaction, sheet_id: str, start_date: str = None, end_date: str = None):
@@ -59,10 +59,10 @@ class ExportController:
             e_dt = datetime.strptime(end_date, '%Y-%m-%d')
             
             if s_dt > e_dt:
-                await interaction.followup.send("❌ Start date cannot be after End date.", ephemeral=True)
+                await interaction.followup.send("❌ Start date cannot be after End date.", ephemeral=False)
                 return
         except ValueError:
-            await interaction.followup.send("❌ Invalid date format. Please use YYYY-MM-DD.", ephemeral=True)
+            await interaction.followup.send("❌ Invalid date format. Please use YYYY-MM-DD.", ephemeral=False)
             return
 
         try:
@@ -70,8 +70,8 @@ class ExportController:
             if result['success']:
                 await interaction.followup.send(content=f"📊 **Google Sheet Updated**\n📅 {start_date} to {end_date}\n🔗 [View Sheet]({result.get('url', '#')})", ephemeral=False)
             else:
-                await interaction.followup.send(content=f"❌ Failed to export: {result['message']}", ephemeral=True)
+                await interaction.followup.send(content=f"❌ Failed to export: {result['message']}", ephemeral=False)
         except Exception as e:
             import traceback
             traceback.print_exc()
-            await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
+            await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=False)

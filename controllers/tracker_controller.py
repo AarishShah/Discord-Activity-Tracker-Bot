@@ -19,14 +19,14 @@ class TrackerController:
             await VoiceService.end_session(member, before.channel, reason="left")
         # SWITCH
         elif before.channel is not None and after.channel is not None and before.channel.id != after.channel.id:
-            await VoiceService.end_session(member, before.channel, reason="hopped", silent=True)
-            VoiceService.start_session(member, after.channel, silent=True)
+            await VoiceService.end_session(member, before.channel, reason="hopped", silent=False)
+            VoiceService.start_session(member, after.channel, silent=False)
             print(f"[Tracker] {member.display_name} hopped from {before.channel.name} to {after.channel.name}")
 
     @staticmethod
     async def today_stats(interaction: discord.Interaction, user: discord.Member = None):
         try:
-            await interaction.response.defer(ephemeral=True)
+            await interaction.response.defer(ephemeral=False)
             target = user or interaction.user
             now = get_ist_time()
             today_str = now.strftime('%Y-%m-%d')
@@ -79,15 +79,15 @@ class TrackerController:
                  embed.set_thumbnail(url=target.display_avatar.url)
             
             embed.add_field(name="📅 Attendance", value=att_status, inline=False)
-            embed.add_field(name="🎙️ Voice Time", value=f"{voice_str}", inline=True)
-            embed.add_field(name="⏳ Overtime", value=f"{overtime_str}", inline=True)
-            embed.add_field(name="🧔 Bhai Count", value=str(bhai_count), inline=True)
+            embed.add_field(name="🎙️ Voice Time", value=f"{voice_str}", inline=False)
+            embed.add_field(name="⏳ Overtime", value=f"{overtime_str}", inline=False)
+            embed.add_field(name="🧔 Bhai Count", value=str(bhai_count), inline=False)
             
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=False)
             
         except Exception as e:
             import traceback
             traceback.print_exc()
-            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=False)
 
 

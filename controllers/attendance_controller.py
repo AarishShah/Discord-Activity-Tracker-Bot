@@ -7,7 +7,7 @@ class AttendanceController:
     async def attendance(interaction: discord.Interaction, status: str, date: str = None, reason: str = None):
         # 1. Handle Absent Logic
         if status == "Absent":
-            await interaction.response.defer(ephemeral=True)
+            await interaction.response.defer(ephemeral=False)
             
             # Default to today if date is None
             if not date:
@@ -32,7 +32,7 @@ class AttendanceController:
         # 2. Handle Present/HalfDay Logic
         # Validate Date Usage
         if date:
-             await interaction.response.send_message("❌ Date parameter is only supported for **Absent** status. Present/Half-Day is always for **Today**.", ephemeral=True)
+             await interaction.response.send_message("❌ Date parameter is only supported for **Absent** status. Present/Half-Day is always for **Today**.", ephemeral=False)
              return
 
         result = await AttendanceService.mark_attendance(
@@ -42,29 +42,29 @@ class AttendanceController:
             status
         )
         emoji = "✅" if result['success'] else "❌"
-        await interaction.response.send_message(f"{emoji} {result['message']}", ephemeral=True)
+        await interaction.response.send_message(f"{emoji} {result['message']}", ephemeral=False)
 
     @staticmethod
     async def lunch(interaction: discord.Interaction):
         result = await AttendanceService.start_lunch(interaction.user.id, interaction.guild.id)
         emoji = "🍔" if result['success'] else "❌"
-        await interaction.response.send_message(f"{emoji} {result['message']}", ephemeral=True)
+        await interaction.response.send_message(f"{emoji} {result['message']}", ephemeral=False)
 
     @staticmethod
     async def away(interaction: discord.Interaction, reason: str):
         result = await AttendanceService.set_away(interaction.user.id, interaction.guild.id, reason)
         emoji = "⚠️" if result['success'] else "❌"
-        await interaction.response.send_message(f"{emoji} {result['message']}", ephemeral=True)
+        await interaction.response.send_message(f"{emoji} {result['message']}", ephemeral=False)
 
     @staticmethod
     async def resume(interaction: discord.Interaction):
         result = await AttendanceService.resume_work(interaction.user.id, interaction.guild.id)
         emoji = "✅" if result['success'] else "❌"
-        await interaction.response.send_message(f"{emoji} {result['message']}", ephemeral=True)
+        await interaction.response.send_message(f"{emoji} {result['message']}", ephemeral=False)
         
     @staticmethod
     async def drop(interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
         result = await AttendanceService.drop_day(interaction.user, interaction.guild.id)
         emoji = "👋" if result['success'] else "❌"
         await interaction.followup.send(f"{emoji} {result['message']}")
