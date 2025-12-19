@@ -15,6 +15,29 @@ class AttendanceService:
         # Enforce Today Only
         target_date_str = now.strftime('%Y-%m-%d')
         
+        # --- Time Restriction for 'Present' ---
+        if status_value == "Present":
+            import os
+            from datetime import timedelta
+            
+            # Default 09:00 AM
+            start_time_str = os.getenv("ATTENDANCE_START_TIME", "09:00")
+            limit_mins = int(os.getenv("LATE_LIMIT_MINUTES", "15"))
+            
+            try:
+                # Parse HH:MM
+                st_hour, st_min = map(int, start_time_str.split(':'))
+                start_dt = now.replace(hour=st_hour, minute=st_min, second=0, microsecond=0)
+                limit_dt = start_dt + timedelta(minutes=limit_mins)
+                
+                if now > limit_dt:
+                     return {
+                         "success": False, 
+                         "message": f"⏳ **Late Entry**: It is past {limit_dt.strftime('%I:%M %p')}. You can only mark **Half Day** or **Absent**."
+                     }
+            except ValueError:
+                print("Error parsing ATTENDANCE_START_TIME")
+
         # Prepare Command Entry
         command_entry = {
             "timestamp": now.isoformat()
