@@ -84,18 +84,24 @@ class ExportService:
             name = user_names.get(uid, f"User {uid}")
             att_headers.append(name)
 
-        # Voice Headers: Date, User A (Voice), User A (Overtime), Total, "", User B...
+        # Voice Headers: Date, User A (Voice), User A (Overtime), Total, Total Minutes, "", User B...
         voice_headers = ["Date"]
         for uid in sorted_users:
             name = user_names.get(uid, f"User {uid}")
             voice_headers.append(f"{name} (Voice)")
             voice_headers.append(f"{name} (Overtime)")
             voice_headers.append("Total")
+            voice_headers.append("Total Minutes")
             voice_headers.append("") # Empty Column
         
         att_rows = [att_headers]
         voice_rows = [voice_headers]
         
+        def to_hhmm(minutes):
+            h = minutes // 60
+            m = minutes % 60
+            return f"{h:02}:{m:02}"
+
         # 6. Build Data Rows
         for day in date_list:
             day_str = day.strftime('%Y-%m-%d')
@@ -133,8 +139,14 @@ class ExportService:
                 
                 total_mins = reg_mins + ot_mins
                 
-                voice_row.append(reg_mins)
-                voice_row.append(ot_mins)
+                # Format: hh:mm
+                reg_str = to_hhmm(reg_mins)
+                ot_str = to_hhmm(ot_mins)
+                total_str = to_hhmm(total_mins)
+                
+                voice_row.append(reg_str)
+                voice_row.append(ot_str)
+                voice_row.append(total_str)
                 voice_row.append(total_mins)
                 voice_row.append("") # Empty Column
             
