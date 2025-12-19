@@ -21,17 +21,51 @@ class GoogleSheetsService:
         return client
 
     @classmethod
-    async def export_to_sheet(cls, sheet_id_or_url, rows):
+    async def get_or_create_year_spreadsheet(cls, year):
         """
-        Exports data to the specified Google Sheet.
-        Appends data? Or Overwrites? 
-        Let's assume we want to clear and write new report, or append to a specific worksheet?
-        For a "Report", usually a new sheet (tab) is best.
+        Finds a spreadsheet named 'Activity_Tracker_{year}'.
+        If not found, creates it.
+        Returns the spreadsheet object.
         """
         client = cls.get_client()
+        sheet_name = f"Activity_Tracker_{year}"
         
+        # 1. Search for existing sheet
+        # listing all main spreadsheets to find match
+        # Note: open_by_url/key is faster if we knew it, but here we search by name.
+        # This might be slow if there are 1000s of sheets, but usually fine for a bot.
+        
+        # Optimization: We can try to open by name directly if library supports it, 
+        # but gspread usually requires 'open' (by title).
         try:
-            # Open by ID or URL
+            sh = client.open(sheet_name)
+            return sh
+        except gspread.SpreadsheetNotFound:
+            # Create new
+            print(f"Spreadsheet '{sheet_name}' not found. Creating...")
+            sh = client.create(sheet_name)
+            # Share with the service account is automatic (it owns it).
+            # But the user needs access.
+            # We can't share with the user without knowing their email.
+            # So we just print the URL.
+            # If we had an Admin Email env var, we could share it here.
+            # For now, just return it.
+            return sh
+
+    @classmethod
+    async def export_to_sheet(cls, sheet_id_or_url, data_payload):
+        """
+        Exports data to a SPECIFIC sheet (manual override).
+        """
+        # Handle split dict - Default to Attendance for manual exports for now
+        rows = []
+        if isinstance(data_payload, dict):
+             rows = data_payload.get('attendance', [])
+        else:
+             rows = data_payload
+             
+        client = cls.get_client()
+        try:
             if "docs.google.com" in sheet_id_or_url:
                 sh = client.open_by_url(sheet_id_or_url)
             else:
@@ -39,31 +73,22 @@ class GoogleSheetsService:
         except Exception as e:
             return {"success": False, "message": f"Failed to open sheet: {str(e)}"}
 
-        # Create a new worksheet for this report with timestamp
         import datetime
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         title = f"Report_{timestamp}"
         
         try:
             worksheet = sh.add_worksheet(title=title, rows=len(rows)+10, cols=len(rows[0])+5)
-        except:
-            # Fallback if max sheets reached or error, try first sheet? 
-            # Or just fail. Let's try to just write to a new sheet.
-            return {"success": False, "message": "Failed to create new worksheet. Structure might be full."}
-            
-        # Write Data
-        try:
-            # Explicitly use update with range_name and values for gspread v6+
             worksheet.update(range_name='A1', values=rows)
-            
-            return {"success": True, "message": f"Exported to Sheet specified! Tab: {title}", "url": f"{sh.url}"}
+            return {"success": True, "message": f"Exported to {title}", "url": f"{sh.url}"}
         except Exception as e:
-             return {"success": False, "message": f"Failed to write data: {str(e)}"}
+             return {"success": False, "message": f"Failed to export: {str(e)}"}
+
     @classmethod
-    async def append_daily_stats(cls, rows, month_name):
+    async def append_daily_stats(cls, data_payload, date_obj):
         """
-        Appends daily stats to a sheet named after the month.
-        rows: List of lists. Row 0 = Headers.
+        Appends daily stats to Year-based tabs: '{Year} Attendance' and '{Year} Voice Stats'.
+        data_payload: { 'attendance': rows, 'voice': rows } (or list for backward compatibility)
         """
         sheet_id = os.getenv("GOOGLE_SHEET_ID")
         if not sheet_id:
@@ -77,64 +102,113 @@ class GoogleSheetsService:
         except Exception as e:
              return {"success": False, "message": f"Failed to open sheet: {e}"}
 
-        # Check/Create Worksheet
+        year_str = date_obj.strftime("%Y")
+        
+        # Unpack Data
+        if isinstance(data_payload, list):
+            attendance_rows = data_payload
+            voice_rows = []
+        else:
+            attendance_rows = data_payload.get('attendance', [])
+            voice_rows = data_payload.get('voice', [])
+
+        results = []
+        
+        # Process Attendance -> "2025 Attendance"
+        if attendance_rows:
+            res_att = cls._append_data_to_year_tab(sh, year_str, "Attendance", attendance_rows, date_obj)
+            results.append(res_att)
+            
+        # Process Voice -> "2025 Voice Stats"
+        if voice_rows:
+            res_voice = cls._append_data_to_year_tab(sh, year_str, "Voice Stats", voice_rows, date_obj)
+            results.append(res_voice)
+            
+        return {"success": True, "message": f"Processed {len(results)} tabs: {', '.join(results)}"}
+
+    @classmethod
+    def _append_data_to_year_tab(cls, sh, year_str, suffix, rows, date_obj):
+        """
+        Helper to append rows to a specific Year+Suffix tab.
+        """
+        # User request: "2025 Attendance" and "2025 Voice Stats"
+        tab_name = f"{year_str} {suffix}"
+        
         try:
-             worksheet = sh.worksheet(month_name)
+             worksheet = sh.worksheet(tab_name)
              
-             # Logic to align data with existing headers
+             # Prepare Separator Rows if 1st of Month (Existing Sheet)
+             separator_rows = []
+             if date_obj.day == 1:
+                 month_label = date_obj.strftime("%B").upper()
+                 current_headers = rows[0] if rows else []
+                 
+                 separator_rows = [
+                     [], [],                 # 2 Empty rows
+                     [month_label],          # Month Name
+                     [],                     # 1 Empty Row
+                     current_headers         # Headers
+                 ]
+
+             # Append Logic
              if len(rows) > 0:
-                 input_headers = rows[0]
-                 data_rows = rows[1:]
+                 data_rows = rows[1:] # rows[0] is headers
                  
-                 # 1. Get Current Sheet Headers
-                 sheet_headers = worksheet.row_values(1)
+                 final_rows_to_append = []
+                 if separator_rows:
+                     final_rows_to_append = separator_rows + data_rows
+                 else:
+                     final_rows_to_append = data_rows
                  
-                 # 2. Identify New Headers (preserve order of appearance in input, though input is already sorted)
-                 new_headers = [h for h in input_headers if h not in sheet_headers]
-                 
-                 if new_headers:
-                     # Update Sheet Headers (Append to end)
-                     # We can't just update Row 1 blindly. We append to the next available columns.
-                     current_col_count = len(sheet_headers)
-                     # Calculate range to update. e.g. Start at Col C+1 -> Col F?
-                     # Easier to just update the whole Row 1 with extended list
-                     updated_headers = sheet_headers + new_headers
-                     worksheet.update(range_name='A1', values=[updated_headers])
+                 if final_rows_to_append:
+                     # Calculate insertion point (Column A height)
+                     # Note: col_values might be expensive on huge sheets, but fine here.
+                     # To be safe, we rely on Col 1.
+                     col_a = worksheet.col_values(1)
+                     next_row = len(col_a) + 1
                      
-                     # Update local reference
-                     sheet_headers = updated_headers
-                 
-                 # 3. Remap Data Rows to match Sheet Header Order
-                 aligned_rows = []
-                 for row in data_rows:
-                     # Create a map {Header: Value}
-                     # Handle cases where row might be shorter than headers (though unlikely from ExportService)
-                     row_map = {input_headers[i]: row[i] for i in range(min(len(input_headers), len(row)))}
+                     # Check if we need to resize
+                     current_row_count = worksheet.row_count
+                     needed_rows = next_row + len(final_rows_to_append)
                      
-                     new_row = []
-                     for header in sheet_headers:
-                         # key is the header text
-                         new_row.append(row_map.get(header, "")) # Default empty if not found
-                     aligned_rows.append(new_row)
-                 
-                 rows = aligned_rows
+                     if needed_rows > current_row_count:
+                         worksheet.add_rows(needed_rows - current_row_count)
+                     
+                     # Explicitly update starting at A{next_row}
+                     # This forces creating new cells at Column A
+                     worksheet.update(range_name=f'A{next_row}', values=final_rows_to_append)
 
         except gspread.WorksheetNotFound:
              # Create new
-             worksheet = sh.add_worksheet(title=month_name, rows=1000, cols=20)
-             # Add Headers (First row of input)
+             worksheet = sh.add_worksheet(title=tab_name, rows=1000, cols=20)
+             
+             # NEW SHEET LAYOUT
+             # Row 1: Tab Name (e.g. "2025 Attendance")
+             # Row 2: Empty
+             # Row 3: Empty
+             # Row 4: Month Name
+             # Row 5: Empty
+             # Row 6: Data (Headers + Rows)
+             
+             title_label = tab_name
+             month_label = date_obj.strftime("%B").upper()
+             
+             layout_rows = [
+                 [title_label],  # Row 1
+                 [],             # Row 2
+                 [],             # Row 3
+                 [month_label],  # Row 4
+                 []              # Row 5
+             ]
+             
              if len(rows) > 0:
-                worksheet.update(range_name='A1', values=[rows[0]])
-                # Remove header from rows to append
-                rows = rows[1:]
+                final_values = layout_rows + rows
+                worksheet.update(range_name='A1', values=final_values)
         
-        if not rows:
-             return {"success": True, "message": "No data to append (only headers)."}
-
-        # Append Data
+        # Apply Word Wrap to the entire sheet (columns A:Z)
         try:
-             # append_rows is safer for adding to bottom
-             worksheet.append_rows(rows)
-             return {"success": True, "message": f"Appended data to {month_name}"}
+            worksheet.format("A:Z", {"wrapStrategy": "WRAP"})
         except Exception as e:
-             return {"success": False, "message": f"Failed to append: {e}"}
+            print(f"Warning: Failed to apply word wrap: {e}")
+
+        return tab_name

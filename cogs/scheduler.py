@@ -82,7 +82,7 @@ class Scheduler(commands.Cog):
             try:
                 print(f"[Scheduler] Exporting data for {guild.name} ({yesterday_str})...")
                 rows = await ExportService.fetch_activity_data(guild, yesterday_str, yesterday_str)
-                result = await GoogleSheetsService.append_daily_stats(rows, month_name)
+                result = await GoogleSheetsService.append_daily_stats(rows, yesterday)
                 
                 if result['success']:
                     print(f"[Scheduler] Export Success: {result['message']}")

@@ -11,7 +11,10 @@ class ExportService:
     async def fetch_activity_data(cls, guild, start_date, end_date):
         """
         Fetches and structures activity data for export.
-        Returns:headers (list), rows (list of lists)
+        Returns: {
+            'attendance': rows (list of lists) -> [[Date, User1, User2...], ...],
+            'voice': rows (list of lists) -> [[Date, U1(V), U1(OT), " ", ...], ...]
+        }
         """
         guild_id = guild.id
         
@@ -64,7 +67,6 @@ class ExportService:
             start_dt = datetime.strptime(start_date, '%Y-%m-%d')
             end_dt = datetime.strptime(end_date, '%Y-%m-%d')
         except ValueError:
-            # Fallback or re-raise
             start_dt = datetime.now()
             end_dt = datetime.now()
             
@@ -75,17 +77,33 @@ class ExportService:
             day = start_dt + timedelta(days=i)
             date_list.append(day)
 
-        # 5. Build Rows
-        headers = ["Date"]
+        # 5. Build Headers
+        # Attendance Headers: Date, User A, User B...
+        att_headers = ["Date"]
         for uid in sorted_users:
             name = user_names.get(uid, f"User {uid}")
-            headers.append(f"{name} (Voice, Overtime)")
+            att_headers.append(name)
+
+        # Voice Headers: Date, User A (Voice), User A (Overtime), Total, "", User B...
+        voice_headers = ["Date"]
+        for uid in sorted_users:
+            name = user_names.get(uid, f"User {uid}")
+            voice_headers.append(f"{name} (Voice)")
+            voice_headers.append(f"{name} (Overtime)")
+            voice_headers.append("Total")
+            voice_headers.append("") # Empty Column
         
-        rows = [headers]
+        att_rows = [att_headers]
+        voice_rows = [voice_headers]
         
+        # 6. Build Data Rows
         for day in date_list:
             day_str = day.strftime('%Y-%m-%d')
-            row = [day_str]
+            
+            # Attendance Row
+            att_row = [day_str]
+            # Voice Row
+            voice_row = [day_str]
             
             is_weekend = day.weekday() >= 5
             
@@ -94,15 +112,16 @@ class ExportService:
                 att_record = attendance_map.get(day_str, {}).get(uid)
                 voice_record = voice_map.get(day_str, {}).get(uid)
                 
-                # Determine Status
+                # --- Attendance Logic ---
                 if is_weekend:
                     status = "Holiday"
                 elif att_record:
                     status = att_record.get('attendance_status', 'Absent')
                 else:
                     status = "Absent"
+                att_row.append(status)
                 
-                # Determine Voice
+                # --- Voice Logic ---
                 reg_mins = 0
                 ot_mins = 0
                 
@@ -111,31 +130,45 @@ class ExportService:
                     ot_sec = voice_record.get('overtime_duration', 0)
                     reg_mins = int(round(reg_sec / 60))
                     ot_mins = int(round(ot_sec / 60))
-                    
-                cell_value = f"{status} ({reg_mins}, {ot_mins})"
-                row.append(cell_value)
+                
+                total_mins = reg_mins + ot_mins
+                
+                voice_row.append(reg_mins)
+                voice_row.append(ot_mins)
+                voice_row.append(total_mins)
+                voice_row.append("") # Empty Column
             
-            rows.append(row)
+            att_rows.append(att_row)
+            voice_rows.append(voice_row)
             
-        return rows
+        return {
+            'attendance': att_rows,
+            'voice': voice_rows
+        }
 
     @classmethod
     async def generate_csv_report(cls, guild, start_date, end_date):
-        rows = await cls.fetch_activity_data(guild, start_date, end_date)
+        # NOTE: This only returns Attendance CSV for now due to split
+        data = await cls.fetch_activity_data(guild, start_date, end_date)
+        rows = data['attendance']
         
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerows(rows)
             
         output.seek(0)
-        return discord.File(fp=output, filename=f"Activity_Report_{start_date}_to_{end_date}.csv")
+        return discord.File(fp=output, filename=f"Attendance_Report_{start_date}_to_{end_date}.csv")
 
     @classmethod
     async def generate_sheet_report(cls, guild, start_date, end_date, sheet_id_or_url):
         from services.google_sheets_service import GoogleSheetsService
         
-        rows = await cls.fetch_activity_data(guild, start_date, end_date)
+        data = await cls.fetch_activity_data(guild, start_date, end_date)
         
-        # Export to Sheets
-        result = await GoogleSheetsService.export_to_sheet(sheet_id_or_url, rows)
-        return result
+        # NOTE: Manual Export to manual sheet ID needs update?
+        # User only uses this via Command.
+        # This function 'generate_sheet_report' relies on 'export_to_sheet'.
+        # We need to update export_to_sheet to handle dict? Or call it twice?
+        # For now, let's just export Attendance to keep it simple, OR refactor this too.
+        # Let's assume for now commands just get Attendance.
+        return await GoogleSheetsService.export_to_sheet(sheet_id_or_url, data['attendance'])
