@@ -17,7 +17,7 @@ import os
 from datetime import datetime, time, timedelta
 
 def get_scheduler_time(env_key, default_ist):
-    ist_str = os.getenv(env_key, default_ist)
+    ist_str = os.getenv(env_key, default_ist).strip('"\'')
     try:
         h, m = map(int, ist_str.split(':'))
         # Convert IST to UTC (-5:30)

@@ -22,7 +22,7 @@ class AttendanceService:
             
             # Default 09:00 AM
             start_time_str = os.getenv("ATTENDANCE_START_TIME", "09:00")
-            limit_mins = int(os.getenv("LATE_LIMIT_MINUTES", "15"))
+            limit_mins = int(os.getenv("LATE_LIMIT_MINUTES", "15").strip('"\''))
             
             try:
                 # Parse HH:MM
