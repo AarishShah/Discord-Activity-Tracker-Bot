@@ -3,17 +3,14 @@ from discord import app_commands
 from discord.ext import commands
 from controllers.general_controller import GeneralController
 
+from utils.discord_utils import validate_channel
+
 class General(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        # Restriction: Only allow commands in "attendance" channel
-        if interaction.channel and interaction.channel.name == "attendance":
-            return True
-        
-        await interaction.response.send_message("❌ You can only use these commands in the **#attendance** channel.", ephemeral=True)
-        return False
+        return await validate_channel(interaction)
 
 
 

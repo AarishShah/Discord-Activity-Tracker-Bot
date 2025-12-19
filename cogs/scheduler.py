@@ -81,17 +81,8 @@ class Scheduler(commands.Cog):
                 message = f"🕰️ **Auto-Drop Summary**: The following users were auto-dropped: {user_list_str}"
                 
                 # Find Channel
-                channel_id = os.getenv("ATTENDANCE_CHANNEL_ID")
-                channel = None
-                
-                if channel_id:
-                    channel = guild.get_channel(int(channel_id))
-                
-                if not channel:
-                     # Fallback: finding channel by name
-                     channel = discord.utils.get(guild.text_channels, name="general")
-                if not channel:
-                     channel = discord.utils.get(guild.text_channels, name="attendance")
+                from utils.discord_utils import get_log_channel
+                channel = get_log_channel(guild)
                      
                 if channel:
                     try:
