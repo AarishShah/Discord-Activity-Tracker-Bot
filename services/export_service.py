@@ -159,17 +159,30 @@ class ExportService:
         }
 
     @classmethod
-    async def generate_csv_report(cls, guild, start_date, end_date):
-        # NOTE: This only returns Attendance CSV for now due to split
+    async def generate_csv_reports(cls, guild, start_date, end_date):
         data = await cls.fetch_activity_data(guild, start_date, end_date)
-        rows = data['attendance']
+        att_rows = data['attendance']
+        voice_rows = data['voice']
         
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerows(rows)
+        files = []
+        
+        # 1. Attendance CSV
+        if att_rows:
+            output_att = io.StringIO()
+            writer_att = csv.writer(output_att)
+            writer_att.writerows(att_rows)
+            output_att.seek(0)
+            files.append(discord.File(fp=output_att, filename=f"Attendance_Report_{start_date}_to_{end_date}.csv"))
             
-        output.seek(0)
-        return discord.File(fp=output, filename=f"Attendance_Report_{start_date}_to_{end_date}.csv")
+        # 2. Voice CSV
+        if voice_rows:
+             output_voice = io.StringIO()
+             writer_voice = csv.writer(output_voice)
+             writer_voice.writerows(voice_rows)
+             output_voice.seek(0)
+             files.append(discord.File(fp=output_voice, filename=f"Voice_Stats_{start_date}_to_{end_date}.csv"))
+             
+        return files
 
     @classmethod
     async def generate_sheet_report(cls, guild, start_date, end_date, sheet_id_or_url):
