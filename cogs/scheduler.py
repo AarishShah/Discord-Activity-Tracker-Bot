@@ -36,7 +36,7 @@ TIME_AUTO_ABSENT = get_scheduler_time("ATTENDANCE_AUTO_ABSENT_TIME", "23:30")
 # Daily Export: 00:30 IST
 TIME_DAILY_EXPORT = get_scheduler_time("ATTENDANCE_EXPORT_TIME", "00:30")
 # Auto Drop: Default 22:00 IST ? User didn't specify default, but I'll use 22:00
-TIME_AUTO_DROP = get_scheduler_time("ATTENDANCE_END_TIME", "09:00")
+TIME_AUTO_DROP = get_scheduler_time("ATTENDANCE_END_TIME", "05:00")
 
 class Scheduler(commands.Cog):
     def __init__(self, bot):
