@@ -40,18 +40,17 @@ class ExportController:
             await interaction.followup.send("❌ An error occurred while generating the CSV.", ephemeral=False)
 
     @staticmethod
-    async def export_to_sheets(interaction: discord.Interaction, sheet_id: str, start_date: str = None, end_date: str = None):
+    async def export_to_sheets(interaction: discord.Interaction, start_date: str = None, end_date: str = None, sheet_id: str = None):
         await interaction.response.defer(ephemeral=False)
         
         now = get_ist_time()
         
-        # Default: Current Month
+        # Default: Yesterday (to match scheduler behavior)
         if not start_date:
-            start_date = now.replace(day=1).strftime('%Y-%m-%d')
+            yesterday = now - timedelta(days=1)
+            start_date = yesterday.strftime('%Y-%m-%d')
         if not end_date:
-            next_month = now.replace(day=28) + timedelta(days=4)
-            last_day = next_month - timedelta(days=next_month.day)
-            end_date = last_day.strftime('%Y-%m-%d')
+            end_date = start_date # Default to single day if only start_date provided or both missing
             
         # Validation
         try:
@@ -66,11 +65,27 @@ class ExportController:
             return
 
         try:
-            result = await ExportService.generate_sheet_report(interaction.guild, start_date, end_date, sheet_id)
-            if result['success']:
-                await interaction.followup.send(content=f"📊 **Google Sheet Updated**\n📅 {start_date} to {end_date}\n🔗 [View Sheet]({result.get('url', '#')})", ephemeral=False)
+            import os
+            from services.google_sheets_service import GoogleSheetsService
+            
+            # If sheet_id is provided, create a NEW worksheet in that sheet
+            if sheet_id:
+                result = await ExportService.generate_sheet_report(interaction.guild, start_date, end_date, sheet_id)
+                if result['success']:
+                    await interaction.followup.send(content=f"📊 **Google Sheet Report Created**\n📅 {start_date} to {end_date}\n🔗 [View Sheet]({result.get('url', '#')})", ephemeral=False)
+                else:
+                    await interaction.followup.send(content=f"❌ Failed to export: {result['message']}", ephemeral=False)
             else:
-                await interaction.followup.send(content=f"❌ Failed to export: {result['message']}", ephemeral=False)
+                # If NO sheet_id, sync to the MAIN tracker tabs (append logic)
+                data = await ExportService.fetch_activity_data(interaction.guild, start_date, end_date)
+                # Use s_dt for year/month context in append_daily_stats
+                result = await GoogleSheetsService.append_daily_stats(data, s_dt)
+                
+                if result['success']:
+                    await interaction.followup.send(content=f"✅ **Sync Success**: Data from {start_date} to {end_date} has been appended to the main tracker.", ephemeral=False)
+                else:
+                    await interaction.followup.send(content=f"❌ **Sync Failed**: {result['message']}", ephemeral=False)
+                    
         except Exception as e:
             import traceback
             traceback.print_exc()
