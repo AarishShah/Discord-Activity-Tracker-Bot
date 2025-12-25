@@ -90,15 +90,18 @@ class GoogleSheetsService:
         Appends daily stats to Year-based tabs: '{Year} Attendance' and '{Year} Voice Stats'.
         data_payload: { 'attendance': rows, 'voice': rows } (or list for backward compatibility)
         """
-        sheet_id = os.getenv("GOOGLE_SHEET_ID")
-        if not sheet_id:
+        sheet_id_or_url = os.getenv("GOOGLE_SHEET_ID")
+        if not sheet_id_or_url:
              return {"success": False, "message": "GOOGLE_SHEET_ID not set in .env"}
 
         client = cls.get_client()
         
         try:
-             # Open Sheet
-             sh = client.open_by_key(sheet_id)
+             # Open Sheet (Handle both ID and URL)
+             if "docs.google.com" in sheet_id_or_url:
+                 sh = client.open_by_url(sheet_id_or_url)
+             else:
+                 sh = client.open_by_key(sheet_id_or_url)
         except Exception as e:
              return {"success": False, "message": f"Failed to open sheet: {e}"}
 
@@ -162,34 +165,32 @@ class GoogleSheetsService:
                  
                  if final_rows_to_append:
                      # Calculate insertion point (Column A height)
-                     # Note: col_values might be expensive on huge sheets, but fine here.
-                     # To be safe, we rely on Col 1.
                      col_a = worksheet.col_values(1)
                      next_row = len(col_a) + 1
                      
-                     # Check if we need to resize
+                     # Check if we need to resize rows
                      current_row_count = worksheet.row_count
                      needed_rows = next_row + len(final_rows_to_append)
                      
                      if needed_rows > current_row_count:
                          worksheet.add_rows(needed_rows - current_row_count)
                      
+                     # Check if we need to resize columns
+                     current_col_count = worksheet.col_count
+                     needed_cols = max(len(r) for r in final_rows_to_append)
+                     if needed_cols > current_col_count:
+                         worksheet.add_cols(needed_cols - current_col_count)
+                     
                      # Explicitly update starting at A{next_row}
-                     # This forces creating new cells at Column A
                      worksheet.update(range_name=f'A{next_row}', values=final_rows_to_append)
 
         except gspread.WorksheetNotFound:
              # Create new
-             worksheet = sh.add_worksheet(title=tab_name, rows=1000, cols=20)
+             # Determine needed columns from data
+             needed_cols = max(len(rows[0]), 20) if rows else 20
+             worksheet = sh.add_worksheet(title=tab_name, rows=1000, cols=needed_cols)
              
              # NEW SHEET LAYOUT
-             # Row 1: Tab Name (e.g. "2025 Attendance")
-             # Row 2: Empty
-             # Row 3: Empty
-             # Row 4: Month Name
-             # Row 5: Empty
-             # Row 6: Data (Headers + Rows)
-             
              title_label = tab_name
              month_label = date_obj.strftime("%B").upper()
              
@@ -203,11 +204,27 @@ class GoogleSheetsService:
              
              if len(rows) > 0:
                 final_values = layout_rows + rows
+                # Ensure enough columns for final_values
+                needed_cols_final = max(len(r) for r in final_values)
+                if needed_cols_final > worksheet.col_count:
+                    worksheet.add_cols(needed_cols_final - worksheet.col_count)
+                
                 worksheet.update(range_name='A1', values=final_values)
         
-        # Apply Word Wrap to the entire sheet (columns A:Z)
+        # Apply Word Wrap to the entire sheet
         try:
-            worksheet.format("A:Z", {"wrapStrategy": "WRAP"})
+            # Format all columns that have data
+            last_col = worksheet.col_count
+            # Convert column number to letter for range (e.g. 26 -> Z, 27 -> AA)
+            def col_to_letter(n):
+                string = ""
+                while n > 0:
+                    n, remainder = divmod(n - 1, 26)
+                    string = chr(65 + remainder) + string
+                return string
+            
+            last_col_letter = col_to_letter(last_col)
+            worksheet.format(f"A:{last_col_letter}", {"wrapStrategy": "WRAP"})
         except Exception as e:
             print(f"Warning: Failed to apply word wrap: {e}")
 

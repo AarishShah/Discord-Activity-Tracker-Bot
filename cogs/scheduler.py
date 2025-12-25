@@ -1,42 +1,32 @@
 import discord
+import os
 from discord.ext import commands, tasks
-from datetime import time
+from datetime import datetime, time, timedelta
+from config.settings import IST
 from services.attendance_service import AttendanceService
 from models.attendance_model import AttendanceModel
 from utils.time_utils import get_ist_time
-
-# Run at 23:30 IST (11:30 PM)
-# Note: tasks.loop time is in UTC if no timezone specified.
-# 23:30 IST = 18:00 UTC.
 from services.export_service import ExportService
 from services.google_sheets_service import GoogleSheetsService
-from datetime import datetime, timedelta
-
-# Helper to parse Env IST -> UTC time
-import os
-from datetime import datetime, time, timedelta
 
 def get_scheduler_time(env_key, default_ist):
     ist_str = os.getenv(env_key, default_ist).strip('"\'')
     try:
         h, m = map(int, ist_str.split(':'))
-        # Convert IST to UTC (-5:30)
-        # Create a dummy datetime to handle day wrap
-        dt = datetime(2000, 1, 1, h, m)
-        utc_dt = dt - timedelta(hours=5, minutes=30)
-        return utc_dt.time()
+        # Return time object with IST timezone
+        # discord.ext.tasks will handle the UTC conversion automatically
+        return time(hour=h, minute=m, tzinfo=IST)
     except Exception as e:
-        print(f"[Scheduler] Error parsing {env_key}: {e}. using default.")
-        dt = datetime.strptime(default_ist, "%H:%M") 
-        utc_dt = dt - timedelta(hours=5, minutes=30)
-        return utc_dt.time()
+        print(f"[Scheduler] Error parsing {env_key} ('{ist_str}'): {e}. Using default {default_ist}")
+        h, m = map(int, default_ist.split(':'))
+        return time(hour=h, minute=m, tzinfo=IST)
 
 # Auto Absent: 23:30 IST
 TIME_AUTO_ABSENT = get_scheduler_time("ATTENDANCE_AUTO_ABSENT_TIME", "23:30")
 # Daily Export: 00:30 IST
 TIME_DAILY_EXPORT = get_scheduler_time("ATTENDANCE_EXPORT_TIME", "00:30")
-# Auto Drop: Default 22:00 IST ? User didn't specify default, but I'll use 22:00
-TIME_AUTO_DROP = get_scheduler_time("ATTENDANCE_END_TIME", "05:00")
+# Auto Drop: Default 22:00 IST
+TIME_AUTO_DROP = get_scheduler_time("ATTENDANCE_END_TIME", "22:00")
 
 class Scheduler(commands.Cog):
     def __init__(self, bot):
@@ -44,6 +34,7 @@ class Scheduler(commands.Cog):
         self.auto_absent_task.start()
         self.daily_export_task.start()
         self.auto_drop_task.start()
+        print(f"[Scheduler] Tasks started. Auto-Absent: {TIME_AUTO_ABSENT}, Export: {TIME_DAILY_EXPORT}, Auto-Drop: {TIME_AUTO_DROP}")
 
     def cog_unload(self):
         self.auto_absent_task.cancel()
@@ -94,7 +85,6 @@ class Scheduler(commands.Cog):
 
     @tasks.loop(time=TIME_AUTO_ABSENT)
     async def auto_absent_task(self):
-        # ... (Existing Logic) ...
         now = get_ist_time()
         
         # Skip Weekends (Sat=5, Sun=6)
@@ -139,8 +129,10 @@ class Scheduler(commands.Cog):
         yesterday_str = yesterday.strftime('%Y-%m-%d')
         
         for guild in self.bot.guilds:
+            print(f"[Scheduler] Checking guild: {guild.name} ({guild.id})")
             # Filter Guild
             if target_guild_id and str(guild.id) != str(target_guild_id):
+                print(f"[Scheduler] Skipping guild {guild.name} (ID mismatch with TARGET_GUILD_ID)")
                 continue
 
             try:
