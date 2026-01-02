@@ -68,7 +68,6 @@ class GeneralController:
         
         # Export
         embed.add_field(name="📂 Export", value=(
-        embed.add_field(name="📂 Export", value=(
             "`/csv [start] [end]` - Download Activity Report\n"
             "`/sync [start] [end]` - Manual Google Sheets Sync\n"
             "`/sheet [id] [start] [end]` - Export to new/specific Sheet"
