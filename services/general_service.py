@@ -19,35 +19,17 @@ class GeneralService:
             }
         )
         
-        # Check Total Count for User (Global or Guild? Logic was "daily logs" update)
-        # Original code updated daily logs. It didn't seem to update global user tally?
-        # Re-reading original `general.py` -> `utils.logs_col.update_one`
-        # So it's daily.
-        
-        # We also need to fetch the new count to display? The user asked for "check 'bhai' count".
-        pass
+        # Increment Global Count (Stored in Users collection)
+        await UserModel.increment_bhai_count(user_id, user_name)
 
     @classmethod
     async def get_bhai_count(cls, user, guild_id):
-        # Count all 'bhai_count' across all daily logs for this user in this guild?
-        # Or just today?
-        # Original `bhai-count` command:
-        # `pipeline = ... match user_id, guild_id ... group sum bhai_count`
-        # Let's replicate this aggregation.
+        # Fetch from Global User Model
+        return await UserModel.get_bhai_count(user.id)
         
-        pipeline = [
-            {"$match": {"user_id": user.id, "guild_id": guild_id}},
-            {"$group": {"_id": "$user_id", "total": {"$sum": "$bhai_count"}}}
-        ]
-        
-        # We need direct DB access for aggregate, or add method to Model
-        # Let's add aggregate method to AttendanceModel or just access collection via Model
-        col = AttendanceModel.get_collection()
-        cursor = col.aggregate(pipeline)
-        result = await cursor.to_list(length=1)
-        
-        total = result[0]['total'] if result else 0
-        return total
+    @classmethod
+    async def get_top_bhai_users(cls, limit=5):
+        return await UserModel.get_top_bhai_users(limit)
 
     @classmethod
     async def process_message(cls, message: discord.Message):

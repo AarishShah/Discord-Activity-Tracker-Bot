@@ -16,3 +16,26 @@ class UserModel:
             user_doc, 
             upsert=True
         )
+
+    @classmethod
+    async def increment_bhai_count(cls, user_id, display_name):
+        await cls.get_collection().update_one(
+            {"_id": str(user_id)},
+            {
+                "$inc": {"global_bhai_count": 1},
+                "$set": {"display_name": display_name}
+            },
+            upsert=True
+        )
+
+    @classmethod
+    async def get_bhai_count(cls, user_id):
+        doc = await cls.get_collection().find_one({"_id": str(user_id)}, {"global_bhai_count": 1})
+        return doc.get('global_bhai_count', 0) if doc else 0
+
+    @classmethod
+    async def get_top_bhai_users(cls, limit=5):
+        cursor = cls.get_collection().find({}, {"display_name": 1, "global_bhai_count": 1})\
+                   .sort("global_bhai_count", -1)\
+                   .limit(limit)
+        return await cursor.to_list(length=limit)
