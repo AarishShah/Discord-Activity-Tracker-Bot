@@ -1,24 +1,38 @@
 from datetime import datetime, timezone
 from models.voice_model import VoiceModel
 from utils.time_utils import get_ist_time
+from models.attendance_model import AttendanceModel
 
 class VoiceService:
     # State Management (Singleton-like behavior via class attributes)
+    # State Management (Singleton-like behavior via class attributes)
     active_sessions = {} # {member_id: session_data}
-    overtime_users = set() # {member_id}
+
+    # Removed in-memory overtime_users set in favor of DB checks
 
     @classmethod
-    def is_user_in_overtime(cls, member_id, guild_id):
-        return (member_id, guild_id) in cls.overtime_users
+    async def start_session(cls, member, channel, silent=False):
+        now_ist = get_ist_time()
+        is_overtime = False
 
-    @classmethod
-    def start_session(cls, member, channel, silent=False):
-        # Force Overtime on Weekends
-        if get_ist_time().weekday() >= 5:
+        # 1. Force Overtime on Weekends
+        if now_ist.weekday() >= 5:
             is_overtime = True
         else:
-            is_overtime = cls.is_user_in_overtime(member.id, channel.guild.id)
-        
+            # 2. Check Database for 'Active' Day Status
+            # If user has "dropped" for the day, they are in Overtime.
+            today_str = now_ist.strftime('%Y-%m-%d')
+            try:
+                doc = await AttendanceModel.find_by_date(member.id, channel.guild.id, today_str)
+                if doc:
+                    commands = doc.get('commands_used', [])
+                    # Check if 'drop' or 'auto-drop' command exists
+                    has_dropped = any(c.get('command') in ['drop', 'auto-drop'] for c in commands)
+                    if has_dropped:
+                        is_overtime = True
+            except Exception as e:
+                print(f"[VoiceService] Error checking attendance for {member.display_name}: {e}")
+
         cls.active_sessions[member.id] = {
             'start_time': datetime.now(timezone.utc),
             'channel_id': channel.id,
@@ -84,10 +98,7 @@ class VoiceService:
     @classmethod
     async def trigger_auto_disconnect(cls, member, guild_id):
         """Called by AttendanceService when user DROPS."""
-        # 1. Mark user as overtime (scoped to guild)
-        cls.overtime_users.add((member.id, guild_id))
-        
-        # 2. If in VC, handle the switch
+        # 1. If in VC, handle the switch
         if member.id in cls.active_sessions:
             current_session = cls.active_sessions[member.id]
             channel = member.guild.get_channel(current_session['channel_id'])
@@ -97,7 +108,8 @@ class VoiceService:
             
             # Start new (overtime) session
             if channel:
-                cls.start_session(member, channel, silent=False)
+                # This will now check DB, see the 'drop' we just pushed, and set Overtime=True
+                await cls.start_session(member, channel, silent=False)
                 print(f"[VoiceService] Auto-disconnect triggered for {member.display_name}. Switched to OVERTIME tracking.")
 
     @classmethod
