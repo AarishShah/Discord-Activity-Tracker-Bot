@@ -29,6 +29,30 @@ class UserModel:
         )
 
     @classmethod
+    async def increment_voice_time(cls, user_id, user_name, regular_sec=0, overtime_sec=0):
+        await cls.get_collection().update_one(
+            {"_id": str(user_id)},
+            {
+                "$inc": {
+                    "total_regular_seconds": regular_sec,
+                    "total_overtime_seconds": overtime_sec
+                },
+                "$set": {"display_name": user_name}
+            },
+            upsert=True
+        )
+
+    @classmethod
+    async def get_voice_stats(cls, user_id):
+        doc = await cls.get_collection().find_one({"_id": str(user_id)})
+        if not doc:
+            return {"regular": 0, "overtime": 0}
+        return {
+            "regular": doc.get('total_regular_seconds', 0),
+            "overtime": doc.get('total_overtime_seconds', 0)
+        }
+
+    @classmethod
     async def get_bhai_count(cls, user_id):
         doc = await cls.get_collection().find_one({"_id": str(user_id)}, {"global_bhai_count": 1})
         return doc.get('global_bhai_count', 0) if doc else 0

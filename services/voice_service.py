@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import os
 from models.voice_model import VoiceModel
+from models.user_model import UserModel
 from utils.time_utils import get_ist_time
 from models.attendance_model import AttendanceModel
 
@@ -184,7 +185,19 @@ class VoiceService:
             },
             duration_seconds=round(duration, 2),
             is_overtime=is_ot
+            is_overtime=is_ot
         )
+
+        # Increment Global User Stats
+        reg_sec = 0
+        ot_sec = 0
+        if is_ot:
+            ot_sec = round(duration, 2)
+        else:
+            reg_sec = round(duration, 2)
+            
+        await UserModel.increment_voice_time(user_id, user_name, reg_sec, ot_sec)
+
         return {
             "user_id": user_id,
             "duration": duration,
