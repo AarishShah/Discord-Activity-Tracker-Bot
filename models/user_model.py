@@ -39,3 +39,10 @@ class UserModel:
                    .sort("global_bhai_count", -1)\
                    .limit(limit)
         return await cursor.to_list(length=limit)
+
+    @classmethod
+    async def get_bhai_rank(cls, user_id):
+        user_count = await cls.get_bhai_count(user_id)
+        # Count how many have strictly more
+        rank = await cls.get_collection().count_documents({"global_bhai_count": {"$gt": user_count}})
+        return rank + 1

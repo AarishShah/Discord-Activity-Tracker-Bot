@@ -62,9 +62,15 @@ class TrackerController:
                     else:
                         total_voice_sec += live_duration
 
-        # 3. Bhai Count
+        # 3. Bhai Count (Global)
         from services.general_service import GeneralService
-        bhai_count = await GeneralService.get_bhai_count(target, guild.id)
+        # get_bhai_count now returns global count
+        global_count = await GeneralService.get_bhai_count(target, guild.id)
+        # get rank
+        rank = await GeneralService.get_bhai_rank(target)
+        
+        # Format Rank: #1, #2, etc.
+        rank_str = f"#{rank}" if rank > 0 else "Unranked"
         
         # 4. Format
         voice_str = VoiceService.format_duration(total_voice_sec)
@@ -79,7 +85,7 @@ class TrackerController:
         embed.add_field(name="📅 Attendance", value=att_status, inline=False)
         embed.add_field(name="🎙️ Voice Time", value=f"{voice_str}", inline=False)
         embed.add_field(name="⏳ Overtime", value=f"{overtime_str}", inline=False)
-        embed.add_field(name="🧔 Bhai Count", value=str(bhai_count), inline=False)
+        embed.add_field(name="🧔 Bhai Count (Global)", value=f"{global_count} (Rank: {rank_str})", inline=False)
         return embed
 
     @staticmethod

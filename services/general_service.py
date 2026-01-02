@@ -32,6 +32,10 @@ class GeneralService:
         return await UserModel.get_top_bhai_users(limit)
 
     @classmethod
+    async def get_bhai_rank(cls, user):
+        return await UserModel.get_bhai_rank(user.id)
+
+    @classmethod
     async def process_message(cls, message: discord.Message):
         """
         Handles On Message logic:
