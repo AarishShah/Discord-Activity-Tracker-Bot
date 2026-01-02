@@ -54,6 +54,7 @@ class Scheduler(commands.Cog):
         
         for guild in self.bot.guilds:
             dropped_users = []
+            failed_users = []
             
             for member in guild.members:
                 if member.bot: continue
@@ -66,6 +67,7 @@ class Scheduler(commands.Cog):
                         dropped_users.append(member.display_name)
                 except Exception as e:
                     print(f"[Scheduler] Error auto-dropping {member.display_name}: {e}")
+                    failed_users.append(f"{member.display_name} ({str(e)})")
             
             # Send Notification if users were dropped
             if dropped_users:
@@ -82,6 +84,13 @@ class Scheduler(commands.Cog):
                         print(f"[Scheduler] Failed to send log to channel: {e}")
                 else:
                     print(f"[Scheduler] No channel found to log auto-drops. (Msg: {message})")
+            
+            # Send Notification if failures occurred
+            if failed_users:
+                error_msg = f"⚠️ **Auto-Drop Failures**: Could not drop the following users:\n" + "\n".join([f"- {u}" for u in failed_users])
+                channel = get_log_channel(guild)
+                if channel:
+                    await channel.send(error_msg)
 
     @tasks.loop(time=TIME_AUTO_ABSENT)
     async def auto_absent_task(self):
@@ -95,8 +104,10 @@ class Scheduler(commands.Cog):
         print(f"[Scheduler] Running Auto-Absent for {now.strftime('%Y-%m-%d')}...")
         today_str = now.strftime('%Y-%m-%d')
         
+        
         for guild in self.bot.guilds:
             absent_users = []
+            failed_users = []
             
             for member in guild.members:
                 if member.bot: continue
@@ -118,13 +129,21 @@ class Scheduler(commands.Cog):
                         absent_users.append(member.display_name)
                 except Exception as e:
                     print(f"[Scheduler] Error processing {member.display_name}: {e}")
+                    failed_users.append(f"{member.display_name} ({str(e)})")
+            
+            channel = get_log_channel(guild)
             
             # Send Notification
             if absent_users:
-                channel = get_log_channel(guild)
                 if channel:
                     user_list = ", ".join(absent_users)
                     await channel.send(f"📉 **Auto-Absent Summary**: The following users were marked absent: {user_list}")
+
+            # Send Failure Notification
+            if failed_users:
+                if channel:
+                    error_msg = f"⚠️ **Auto-Absent Failures**: Could not mark the following users:\n" + "\n".join([f"- {u}" for u in failed_users])
+                    await channel.send(error_msg)
 
     @tasks.loop(time=TIME_DAILY_EXPORT)
     async def daily_export_task(self):
