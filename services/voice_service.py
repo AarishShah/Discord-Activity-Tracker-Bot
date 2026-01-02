@@ -86,7 +86,7 @@ class VoiceService:
             
             triggered_split = False
             
-            if session.get('overtime_reason') == 'pre_shift':
+            if session.get('overtime_reason') == 'pre_shift' and reason != 'shift_start':
                 start_hour_str = os.getenv("ATTENDANCE_START_TIME", "09:00")
                 try:
                     sh, sm = map(int, start_hour_str.split(':'))

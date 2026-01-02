@@ -4,6 +4,7 @@ from discord.ext import commands, tasks
 from datetime import datetime, time, timedelta
 from config.settings import IST
 from services.attendance_service import AttendanceService
+from services.voice_service import VoiceService
 from models.attendance_model import AttendanceModel
 from utils.time_utils import get_ist_time
 from services.export_service import ExportService
@@ -28,6 +29,8 @@ TIME_AUTO_ABSENT = get_scheduler_time("ATTENDANCE_AUTO_ABSENT_TIME", "23:30")
 TIME_DAILY_EXPORT = get_scheduler_time("ATTENDANCE_EXPORT_TIME", "00:30")
 # Auto Drop: Default 22:00 IST
 TIME_AUTO_DROP = get_scheduler_time("ATTENDANCE_END_TIME", "22:00")
+# Shift Start: Default 09:00 IST
+TIME_SHIFT_START = get_scheduler_time("ATTENDANCE_START_TIME", "09:00")
 
 class Scheduler(commands.Cog):
     def __init__(self, bot):
@@ -35,12 +38,14 @@ class Scheduler(commands.Cog):
         self.auto_absent_task.start()
         self.daily_export_task.start()
         self.auto_drop_task.start()
-        print(f"[Scheduler] Tasks started. Auto-Absent: {TIME_AUTO_ABSENT}, Export: {TIME_DAILY_EXPORT}, Auto-Drop: {TIME_AUTO_DROP}")
+        self.shift_start_task.start()
+        print(f"[Scheduler] Tasks started. Auto-Absent: {TIME_AUTO_ABSENT}, Export: {TIME_DAILY_EXPORT}, Auto-Drop: {TIME_AUTO_DROP}, Shift-Start: {TIME_SHIFT_START}")
 
     def cog_unload(self):
         self.auto_absent_task.cancel()
         self.daily_export_task.cancel()
         self.auto_drop_task.cancel()
+        self.shift_start_task.cancel()
     
     @tasks.loop(time=TIME_AUTO_DROP)
     async def auto_drop_task(self):
@@ -145,6 +150,66 @@ class Scheduler(commands.Cog):
                     error_msg = f"⚠️ **Auto-Absent Failures**: Could not mark the following users:\n" + "\n".join([f"- {u}" for u in failed_users])
                     await channel.send(error_msg)
 
+                if channel:
+                    error_msg = f"⚠️ **Auto-Absent Failures**: Could not mark the following users:\n" + "\n".join([f"- {u}" for u in failed_users])
+                    await channel.send(error_msg)
+
+    @tasks.loop(time=TIME_SHIFT_START)
+    async def shift_start_task(self):
+        """
+        Runs at the start of the work day (e.g. 9 AM).
+        Checks for users who are in 'pre_shift' overtime and switches them to Regular.
+        """
+        now = get_ist_time()
+        print(f"[Scheduler] Running Shift-Start Check for {now.strftime('%Y-%m-%d')}...")
+        
+        # Skip Weekends
+        if now.weekday() >= 5:
+            return
+
+        switched_users = []
+        
+        # Snapshot of keys to avoid modification during iteration
+        active_ids = list(VoiceService.active_sessions.keys())
+        
+        for member_id in active_ids:
+            session = VoiceService.active_sessions.get(member_id)
+            if not session: continue
+            
+            if session.get('overtime_reason') == 'pre_shift':
+                guild_id = session['guild_id']
+                guild = self.bot.get_guild(guild_id)
+                if not guild: continue
+                
+                member = guild.get_member(member_id)
+                channel = guild.get_channel(session['channel_id'])
+                
+                if member and channel:
+                    try:
+                        # 1. End Overtime Session
+                        await VoiceService.end_session(member, channel, reason="shift_start")
+                        # 2. Start Regular Session
+                        # Since it is now >= 9 AM, start_session will not mark it as pre_shift
+                        await VoiceService.start_session(member, channel)
+                        
+                        switched_users.append(member.display_name)
+                        print(f"[Scheduler] Switched {member.display_name} from Pre-Shift OT to Regular.")
+                        
+                    except Exception as e:
+                        print(f"[Scheduler] Error switching session for {member.display_name}: {e}")
+
+        # Notification
+        if switched_users:
+            # Group by Guild to be polite? Or just send to relevant guild logs.
+            # Simplified: finding first guild found in loop? No, iterating global users.
+            # Ideally map users to guilds and send batch messages.
+            # Since we have guild object inside...
+            
+            # Simple approach: Log to console mainly, maybe find first guild log.
+            # Or iterate set of guilds affected.
+            user_list = ", ".join(switched_users)
+            print(f"[Scheduler] Shift Start Summary: Switched {len(switched_users)} users: {user_list}")
+
     @tasks.loop(time=TIME_DAILY_EXPORT)
     async def daily_export_task(self):
         print("[Scheduler] Running Daily Export Task...")
@@ -191,6 +256,10 @@ class Scheduler(commands.Cog):
 
     @auto_drop_task.before_loop
     async def before_auto_drop(self):
+        await self.bot.wait_until_ready()
+
+    @shift_start_task.before_loop
+    async def before_shift_start(self):
         await self.bot.wait_until_ready()
 
 async def setup(bot):
