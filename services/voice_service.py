@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import os
 from models.voice_model import VoiceModel
 from utils.time_utils import get_ist_time
 from models.attendance_model import AttendanceModel
@@ -33,13 +34,31 @@ class VoiceService:
             except Exception as e:
                 print(f"[VoiceService] Error checking attendance for {member.display_name}: {e}")
 
+        # 3. Check for Pre-Work Hours (Before 9 AM)
+        # Only if not already overtime (due to weekend/drop)
+        overtime_reason = None
+        start_hour_str = os.getenv("ATTENDANCE_START_TIME", "09:00")
+        try:
+            sh, sm = map(int, start_hour_str.split(':'))
+            # Create a localized datetime for today's start time
+            # Note: now_ist is TZ-aware (IST). We must keep comparisons safe.
+            start_threshold = now_ist.replace(hour=sh, minute=sm, second=0, microsecond=0)
+            
+            if not is_overtime:
+                if now_ist < start_threshold:
+                    is_overtime = True
+                    overtime_reason = "pre_shift"
+        except Exception as e:
+            print(f"[VoiceService] Error parsing ATTENDANCE_START_TIME: {e}")
+
         cls.active_sessions[member.id] = {
             'start_time': datetime.now(timezone.utc),
             'channel_id': channel.id,
             'channel_name': channel.name,
             'guild_id': channel.guild.id,
             'user_name': member.display_name,
-            'is_overtime': is_overtime
+            'is_overtime': is_overtime,
+            'overtime_reason': overtime_reason
         }
         
         if not silent:
@@ -51,49 +70,127 @@ class VoiceService:
         if member.id in cls.active_sessions:
             session = cls.active_sessions.pop(member.id)
             
-            start_time = session['start_time']
-            end_time = datetime.now(timezone.utc)
-            duration = (end_time - start_time).total_seconds()
+            # Times are UTC for duration calc, but we need IST for logic
+            start_time_utc = session['start_time']
+            end_time_utc = datetime.now(timezone.utc)
             
-            # Prepare record for DB
-            record = {
-                'user_id': member.id,
-                'user_name': session['user_name'],
-                'channel_id': session['channel_id'],
-                'channel_name': session['channel_name'],
-                'guild_id': session['guild_id'],
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat(),
-                'duration_seconds': round(duration, 2),
-                'disconnect': reason,
-                'status': 'overtime' if session.get('is_overtime') else 'regular'
-            }
+            # --- Logic for Pre-Shift Split (Overtime -> Regular) ---
+            # If session was marked overtime ONLY because it was before 9AM ("pre_shift"),
+            # AND it ends AFTER 9AM, we split it.
             
-            ist_now = get_ist_time()
-            date_str = ist_now.strftime('%Y-%m-%d')
+            # We need IST conversion to check the 9AM boundary
+            import pytz
+            ist = pytz.timezone('Asia/Kolkata')
+            start_ist = start_time_utc.astimezone(ist)
+            end_ist = end_time_utc.astimezone(ist)
             
-            # Call Model
-            await VoiceModel.append_session(
-                user_id=record['user_id'],
-                guild_id=record['guild_id'],
-                date_str=date_str,
-                user_name=record['user_name'],
-                session_data={
-                    "channel_name": record['channel_name'],
-                    "start_time": record['start_time'],
-                    "end_time": record['end_time'],
-                    "duration": record['duration_seconds'],
-                    "disconnect": reason,
-                    "status": record['status']
-                },
-                duration_seconds=record['duration_seconds'],
-                is_overtime=(record['status'] == 'overtime')
+            triggered_split = False
+            
+            if session.get('overtime_reason') == 'pre_shift':
+                start_hour_str = os.getenv("ATTENDANCE_START_TIME", "09:00")
+                try:
+                    sh, sm = map(int, start_hour_str.split(':'))
+                    # 9:00 AM Today
+                    split_threshold = end_ist.replace(hour=sh, minute=sm, second=0, microsecond=0)
+                    
+                    if end_ist > split_threshold and start_ist < split_threshold:
+                        triggered_split = True
+                        
+                        # --- PART 1: Overtime (Start -> 9:00) ---
+                        # Calculate duration for part 1
+                        # We can subtract timestamps.
+                        # Note: split_threshold is IST. Convert to UTC for consistency or just diff.
+                        split_threshold_utc = split_threshold.astimezone(timezone.utc)
+                        
+                        dur_p1 = (split_threshold_utc - start_time_utc).total_seconds()
+                        
+                        # Log Part 1 (Overtime)
+                        await cls._log_single_session(
+                             user_id=member.id,
+                             guild_id=session['guild_id'],
+                             channel_name=session['channel_name'],
+                             user_name=session['user_name'],
+                             start_time=start_time_utc,
+                             end_time=split_threshold_utc,
+                             duration=dur_p1,
+                             disconnect_reason="split_regular", # Internal markers
+                             status="overtime",
+                             is_ot=True
+                        )
+                        
+                        # --- PART 2: Regular (9:00 -> End) ---
+                        dur_p2 = (end_time_utc - split_threshold_utc).total_seconds()
+                        
+                        record_p2 = await cls._log_single_session(
+                             user_id=member.id,
+                             guild_id=session['guild_id'],
+                             channel_name=session['channel_name'],
+                             user_name=session['user_name'],
+                             start_time=split_threshold_utc,
+                             end_time=end_time_utc,
+                             duration=dur_p2,
+                             disconnect_reason=reason,
+                             status="regular",
+                             is_ot=False
+                        )
+                        
+                        if not silent:
+                            print(f"[VoiceService] Session SPLIT for {member.display_name}: {round(dur_p1)}s OT + {round(dur_p2)}s Reg.")
+                        
+                        return record_p2
+
+                except Exception as e:
+                    print(f"[VoiceService] Error during split calculation: {e}")
+
+            # --- Standard Path (No Split) ---
+            duration = (end_time_utc - start_time_utc).total_seconds()
+            status = 'overtime' if session.get('is_overtime') else 'regular'
+            
+            record = await cls._log_single_session(
+                 user_id=member.id,
+                 guild_id=session['guild_id'],
+                 channel_name=session['channel_name'],
+                 user_name=session['user_name'],
+                 start_time=start_time_utc,
+                 end_time=end_time_utc,
+                 duration=duration,
+                 disconnect_reason=reason,
+                 status=status,
+                 is_ot=session.get('is_overtime')
             )
             
             if not silent:
                 print(f"[VoiceService] Session ENDED: {member.display_name} in {session['channel_name']}. Duration: {round(duration, 2)}s")
             return record
         return None
+
+    @classmethod
+    async def _log_single_session(cls, user_id, guild_id, channel_name, user_name, start_time, end_time, duration, disconnect_reason, status, is_ot):
+        ist_now = get_ist_time()
+        date_str = ist_now.strftime('%Y-%m-%d')
+        
+        await VoiceModel.append_session(
+            user_id=user_id,
+            guild_id=guild_id,
+            date_str=date_str,
+            user_name=user_name,
+            session_data={
+                "channel_name": channel_name,
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "duration": round(duration, 2),
+                "disconnect": disconnect_reason,
+                "status": status
+            },
+            duration_seconds=round(duration, 2),
+            is_overtime=is_ot
+        )
+        return {
+            "user_id": user_id,
+            "duration": duration,
+            "status": status,
+            "channel_name": channel_name
+        }
 
     @classmethod
     async def trigger_auto_disconnect(cls, member, guild_id):
