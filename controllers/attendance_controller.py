@@ -66,5 +66,14 @@ class AttendanceController:
     async def drop(interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
         result = await AttendanceService.drop_day(interaction.user, interaction.guild.id)
-        emoji = "👋" if result['success'] else "❌"
-        await interaction.followup.send(f"{emoji} {result['message']}")
+        
+        if result['success']:
+             # Show Daily Stats
+             from controllers.tracker_controller import TrackerController
+             embed = await TrackerController.build_daily_stats_embed(interaction.user, interaction.guild)
+             # Prepend the drop confirmation to the description or send as message?
+             # User requested "show the same message as ... /today", but likely still wants to know they dropped.
+             # We can just send the embed, maybe add the result message in content.
+             await interaction.followup.send(content=f"👋 {result['message']}", embed=embed)
+        else:
+             await interaction.followup.send(f"❌ {result['message']}")
