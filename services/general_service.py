@@ -78,7 +78,30 @@ class GeneralService:
                              f"{old_name} fell off. {new_name} is the captain now.",
                              f"Imagine losing your spot to {new_name}. Couldn't be me, {old_name}.",
                              f"{new_name} just cooked {old_name}. 🍳",
-                             f"Game over {old_name}. {new_name} has taken the lead!"
+                             f"Game over {old_name}. {new_name} has taken the bhai lead!",
+
+                             # Assassin's Creed
+                             f"Requiescat in pace, {old_name}. {new_name} is the new Mentor.",
+                             f"Nothing is true, everything is permitted... except {old_name} keeping #1.",
+                             f"{new_name} performed a leap of faith strictly over {old_name}.",
+
+                             # Call of Duty
+                             f"{new_name} called in a Tactical Nuke on {old_name}'s score!",
+                             f"Mission failed, {old_name}. We'll get 'em next time.",
+                             f"Enemy UAV spotted. {new_name} just outflanked {old_name}.",
+                             f"{old_name} is in the Gulag. {new_name} is redeploying as #1.",
+
+                             # CS:GO
+                             f"Bomb has been planted. {new_name} just blew past {old_name}.",
+                             f"{new_name} just 360 no-scoped {old_name} off the leaderboard.",
+
+                             # Developer / Coding
+                             f"git push --force: {new_name} overwrote {old_name}'s history.",
+                             f"404: {old_name} not found at #1. {new_name} is the new endpoint.",
+                             f"{old_name} is now deprecated. {new_name} is the latest stable release.",
+                             f"{new_name} just successfully merged into Main. {old_name} has merge conflicts.",
+                             f"sudo userdel {old_name} && sudo usermod -aG sudo {new_name}",
+                             f"sudo rm -rf /{old_name} && sudo install {new_name}"
                          ]
                          troll = random.choice(trolls)
                          
