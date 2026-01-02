@@ -174,8 +174,8 @@ class AttendanceService:
             "timestamp": now.isoformat()
         })
         
-        # Trigger Voice Auto-Disconnect
-        await VoiceService.trigger_auto_disconnect(user, guild_id)
+        # Trigger Voice Auto-Reconnect
+        await VoiceService.trigger_auto_reconnect(user, guild_id)
         
         return {"success": True, "message": f"Good bye! Day ended. Duration: {round(duration/3600, 2)}h"}
 
@@ -218,8 +218,8 @@ class AttendanceService:
             "timestamp": now.isoformat()
         })
         
-        # Trigger Voice Auto-Disconnect
-        await VoiceService.trigger_auto_disconnect(user, guild_id)
+        # Trigger Voice Auto-Reconnect
+        await VoiceService.trigger_auto_reconnect(user, guild_id)
         
         return {"success": True, "message": f"Auto-dropped {user.display_name}."}
 

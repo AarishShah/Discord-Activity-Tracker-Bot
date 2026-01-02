@@ -193,7 +193,7 @@ class VoiceService:
         }
 
     @classmethod
-    async def trigger_auto_disconnect(cls, member, guild_id):
+    async def trigger_auto_reconnect(cls, member, guild_id):
         """Called by AttendanceService when user DROPS."""
         # 1. If in VC, handle the switch
         if member.id in cls.active_sessions:
@@ -201,13 +201,13 @@ class VoiceService:
             channel = member.guild.get_channel(current_session['channel_id'])
             
             # End current (regular) session
-            await cls.end_session(member, channel, reason="auto-disconnect")
+            await cls.end_session(member, channel, reason="auto-reconnect")
             
             # Start new (overtime) session
             if channel:
                 # This will now check DB, see the 'drop' we just pushed, and set Overtime=True
                 await cls.start_session(member, channel, silent=False)
-                print(f"[VoiceService] Auto-disconnect triggered for {member.display_name}. Switched to OVERTIME tracking.")
+                print(f"[VoiceService] Auto-reconnect triggered for {member.display_name}. Switched to OVERTIME tracking.")
 
     @classmethod
     async def get_statistic_data(cls, user, guild_id, start_date, end_date):
