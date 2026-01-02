@@ -14,9 +14,9 @@ class GeneralController:
 
     # General Logic
     @staticmethod
-    async def bhai_count(interaction: discord.Interaction, user: discord.Member = None, show_top: str = None):
+    async def bhai_count(interaction: discord.Interaction, user: discord.Member = None, top_5: bool = False):
         # 1. Top 5 Mode
-        if show_top == "Top 5":
+        if top_5:
             top_users = await GeneralService.get_top_bhai_users(limit=5)
             if not top_users:
                 await interaction.response.send_message("No data found.", ephemeral=False)
@@ -62,7 +62,7 @@ class GeneralController:
         embed.add_field(name="⚙️ General", value=(
             "`/away [reason]` - Set status to Away\n"
             "`/resume` - Resume activity (Active)\n"
-            "`/bhai-count [user] [mode]` - Check 'bhai' count or Top 5 Leaderboard\n"
+            "`/bhai-count [user] [top_5]` - Check count or Leaderboard\n"
             "`/update` - (Admin) Sync global stats from history"
         ), inline=False)
         
