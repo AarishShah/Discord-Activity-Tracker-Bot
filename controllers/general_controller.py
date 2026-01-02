@@ -36,7 +36,7 @@ class GeneralController:
         target = user or interaction.user
         count = await GeneralService.get_bhai_count(target, interaction.guild.id)
         
-        await interaction.response.send_message(f"🧔 **{target.display_name}** has been called 'bhai' **{count}** times (Global).", ephemeral=False)
+        await interaction.response.send_message(f"🧔 **{target.display_name}** has searched for his 'bhai' **{count}** times.", ephemeral=False)
         
     @staticmethod
     async def on_message(message: discord.Message):
