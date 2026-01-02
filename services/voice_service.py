@@ -185,7 +185,6 @@ class VoiceService:
             },
             duration_seconds=round(duration, 2),
             is_overtime=is_ot
-            is_overtime=is_ot
         )
 
         # Increment Global User Stats
