@@ -62,12 +62,16 @@ class GeneralController:
         embed.add_field(name="⚙️ General", value=(
             "`/away [reason]` - Set status to Away\n"
             "`/resume` - Resume activity (Active)\n"
-            "`/bhai-count [user]` - Check 'bhai' count"
+            "`/bhai-count [user] [mode]` - Check 'bhai' count or Top 5 Leaderboard\n"
+            "`/update` - (Admin) Sync global stats from history"
         ), inline=False)
         
         # Export
         embed.add_field(name="📂 Export", value=(
-            "`/csv [start] [end]` - Download Activity Report"
+        embed.add_field(name="📂 Export", value=(
+            "`/csv [start] [end]` - Download Activity Report\n"
+            "`/sync [start] [end]` - Manual Google Sheets Sync\n"
+            "`/sheet [id] [start] [end]` - Export to new/specific Sheet"
         ), inline=False)
         
         await interaction.response.send_message(embed=embed, ephemeral=False)

@@ -16,24 +16,23 @@ The project follows a layered architecture inspired by Node.js patterns:
 ### Attendance
 *   **Mark Attendance**: Users can mark themselves as "Present" or "Half Day".
 *   **Late Policy**: "Present" status is only allowed within a configurable window (e.g., 9:00 AM - 9:15 AM). Late users must mark "Half Day" or "Absent".
-*   **Status Tracking**: Supports tracking specific statuses like lunch breaks and "away" (AFK) periods.
-*   **Auto-Drop**: Automatically ends the day for users at a configured time (e.g., 22:00 IST) and logs it.
-*   **Auto-Absent**: Automatically marks users as "Absent" if they haven't marked attendance by the end of the day.
+*   **Auto-Drop**: At **22:00 IST** (configurable), the bot automatically "drops" (signs out) anyone who hasn't already dropped. This ensures everyone's day is closed properly.
+*   **Auto-Absent**: At **23:30 IST**, anyone who has not marked attendance at all is automatically marked as "Absent".
 
-### Voice Tracking
-*   **Session Logging**: Automatically tracks time spent in voice channels.
-*   **Auto-Disconnect**: If a user signs out (`/drop`) while in a voice channel, their session is automatically split. Subsequent time is logged as "overtime".
-*   **Detailed Stats**: Exports data with `hh:mm` formatting for Voice and Overtime, plus a Total Minutes column.
+### Voice Tracking & Overtime Rules
+*   **Early Join (Pre-Shift)**: If a user joins a voice channel **before 09:00 AM**, that specific session is tracked as **Overtime**. Once the clock hits 09:00 AM, the session automatically splits, and subsequent time is tracked as Regular hours.
+*   **Regular Hours**: Time spent in voice channels during the day is tracked as Regular Voice Time.
+*   **Overtime (Post-Drop)**: If a user is still in a voice channel after using `/drop` (or being auto-dropped), their status switches to Overtime.
+*   **Weekends**: Any voice activity on Weekends (Sat/Sun) is always tracked as Overtime.
+*   **Global Stats**: The bot maintains a running total of every user's **Global Regular Voice Time** and **Global Overtime**, which persists indefinitely.
 
-### Export (Google Sheets & CSV)
-*   **Split Sheets**: Data is exported into two separate tabs per year:
-    *   **{Year} Attendance**: Simplified status view.
-    *   **{Year} Voice Stats**: Detailed voice metrics.
-*   **CSV Download**: The `/csv` command returns two separate CSV files (Attendance and Voice Stats).
+### Automation & Export
+*   **Auto-Update Google Sheet**: Every night at **00:30 IST**, the bot automatically syncs the previous day's activity (Attendance & Voice logs) to the configured Google Sheet.
+*   **CSV Download**: On-demand CSV exports via `/csv`.
+*   **Google Sheets Integration**: Appends new rows for every day's data.
 
-### General
-*   **Persistent Responses**: All bot responses are visible to everyone (not ephemeral) for transparency.
-*   **Channel Restriction**: Bot commands are restricted to a specific channel (default `#attendance`).
+### General & Fun
+*   **Bhai Count**: Tracks how often users search for their "bhai". Includes a global leaderboard (`/bhai-count mode:Top 5`) and "Overtake Notifications" when the #1 rank changes.
 *   **Auto-Reply**: Automatically replies to mentions of absent or busy users.
 
 ## Setup
@@ -112,9 +111,12 @@ To enable export functionality, you need a Google Service Account:
 
 ### Export
 *   `/csv [start] [end]`: Download Activity Report (Returns 2 CSV files).
+*   `/sync [start] [end]`: Manually trigger sync to the main Google Sheet.
+*   `/sheet [id] [start] [end]`: Export report to a specific Google Sheet ID/URL.
 
 ### Utility
-*   `/bhai-count [user]`: Check how many times a user has been called "bhai".
+*   `/bhai-count [user] [mode]`: Check "bhai" count for a user or view the **Top 5** leaderboard.
+*   `/update`: (Admin) Sync global stats from historical data.
 
 ## Note from Developer
 
