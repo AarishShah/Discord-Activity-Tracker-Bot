@@ -8,6 +8,7 @@ from models.attendance_model import AttendanceModel
 from utils.time_utils import get_ist_time
 from services.export_service import ExportService
 from services.google_sheets_service import GoogleSheetsService
+from utils.discord_utils import get_log_channel
 
 def get_scheduler_time(env_key, default_ist):
     ist_str = os.getenv(env_key, default_ist).strip('"\'')
@@ -72,7 +73,6 @@ class Scheduler(commands.Cog):
                 message = f"🕰️ **Auto-Drop Summary**: The following users were auto-dropped: {user_list_str}"
                 
                 # Find Channel
-                from utils.discord_utils import get_log_channel
                 channel = get_log_channel(guild)
                      
                 if channel:
@@ -93,13 +93,13 @@ class Scheduler(commands.Cog):
             return
  
         print(f"[Scheduler] Running Auto-Absent for {now.strftime('%Y-%m-%d')}...")
-        
         today_str = now.strftime('%Y-%m-%d')
         
         for guild in self.bot.guilds:
+            absent_users = []
+            
             for member in guild.members:
-                if member.bot:
-                    continue
+                if member.bot: continue
                 
                 # Check Attendance
                 try:
@@ -115,13 +115,20 @@ class Scheduler(commands.Cog):
                             date_str=today_str,
                             reason="Auto-Absent (End of Day)"
                         )
+                        absent_users.append(member.display_name)
                 except Exception as e:
                     print(f"[Scheduler] Error processing {member.display_name}: {e}")
+            
+            # Send Notification
+            if absent_users:
+                channel = get_log_channel(guild)
+                if channel:
+                    user_list = ", ".join(absent_users)
+                    await channel.send(f"📉 **Auto-Absent Summary**: The following users were marked absent: {user_list}")
 
     @tasks.loop(time=TIME_DAILY_EXPORT)
     async def daily_export_task(self):
         print("[Scheduler] Running Daily Export Task...")
-        import os
         target_guild_id = os.getenv("TARGET_GUILD_ID")
         
         now = get_ist_time()
@@ -132,8 +139,9 @@ class Scheduler(commands.Cog):
             print(f"[Scheduler] Checking guild: {guild.name} ({guild.id})")
             # Filter Guild
             if target_guild_id and str(guild.id) != str(target_guild_id):
-                print(f"[Scheduler] Skipping guild {guild.name} (ID mismatch with TARGET_GUILD_ID)")
                 continue
+            
+            channel = get_log_channel(guild)
 
             try:
                 print(f"[Scheduler] Exporting data for {guild.name} ({yesterday_str})...")
@@ -142,10 +150,17 @@ class Scheduler(commands.Cog):
                 
                 if result['success']:
                     print(f"[Scheduler] Export Success: {result['message']}")
+                    if channel:
+                        await channel.send(f"📊 **Daily Export**: Data for **{yesterday_str}** has been successfully updated in Google Sheets.")
                 else:
                      print(f"[Scheduler] Export Failed: {result['message']}")
+                     if channel:
+                        await channel.send(f"⚠️ **Daily Export Failed**: {result['message']}")
+
             except Exception as e:
                 print(f"[Scheduler] Error exporting for {guild.name}: {e}")
+                if channel:
+                    await channel.send(f"⚠️ **Daily Export Error**: {str(e)}")
 
     @auto_absent_task.before_loop
     async def before_auto_absent(self):
