@@ -32,6 +32,14 @@ class GeneralService:
         return await UserModel.get_top_bhai_users(limit)
 
     @classmethod
+    async def get_bottom_bhai_users(cls, limit=5):
+        return await UserModel.get_bottom_bhai_users(limit)
+
+    @classmethod
+    async def get_all_bhai_users(cls):
+        return await UserModel.get_all_bhai_users()
+
+    @classmethod
     async def get_bhai_rank(cls, user):
         return await UserModel.get_bhai_rank(user.id)
 

@@ -59,10 +59,25 @@ class UserModel:
 
     @classmethod
     async def get_top_bhai_users(cls, limit=5):
-        cursor = cls.get_collection().find({}, {"display_name": 1, "global_bhai_count": 1})\
+        cursor = cls.get_collection().find({"global_bhai_count": {"$gt": 0}}, {"display_name": 1, "global_bhai_count": 1})\
                    .sort("global_bhai_count", -1)\
                    .limit(limit)
         return await cursor.to_list(length=limit)
+
+    @classmethod
+    async def get_bottom_bhai_users(cls, limit=5):
+        # Only users with count > 0 to make it meaningful? Or include 0s?
+        # Assuming > 0 for now to avoid listing inactive people as "leaders"
+        cursor = cls.get_collection().find({"global_bhai_count": {"$gt": 0}}, {"display_name": 1, "global_bhai_count": 1})\
+                   .sort("global_bhai_count", 1)\
+                   .limit(limit)
+        return await cursor.to_list(length=limit)
+
+    @classmethod
+    async def get_all_bhai_users(cls):
+        cursor = cls.get_collection().find({"global_bhai_count": {"$gt": 0}}, {"display_name": 1, "global_bhai_count": 1})\
+                   .sort("global_bhai_count", -1)
+        return await cursor.to_list(length=None)
 
     @classmethod
     async def get_bhai_rank(cls, user_id):

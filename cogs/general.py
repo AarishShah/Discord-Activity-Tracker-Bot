@@ -15,10 +15,16 @@ class General(commands.Cog):
 
 
 
-    @app_commands.command(name="bhai-count", description="Check how many times someone has been called 'bhai'")
-    @app_commands.describe(user="User to check", top_5="Show Top 5 Leaderboard")
-    async def bhai_count(self, interaction: discord.Interaction, user: discord.Member = None, top_5: bool = False):
-        await GeneralController.bhai_count(interaction, user, top_5)
+    @app_commands.command(name="bhai-count", description="Check 'bhai' stats")
+    @app_commands.describe(user="User to check", leaderboard="View Leaderboard Options")
+    @app_commands.choices(leaderboard=[
+        app_commands.Choice(name="Top 5", value="top_5"),
+        app_commands.Choice(name="Lower 5", value="lower_5"),
+        app_commands.Choice(name="All", value="all")
+    ])
+    async def bhai_count(self, interaction: discord.Interaction, user: discord.Member = None, leaderboard: app_commands.Choice[str] = None):
+        view = leaderboard.value if leaderboard else None
+        await GeneralController.bhai_count(interaction, user, view)
 
     @app_commands.command(name="update", description="Admin: Sync global stats from historical data")
     async def update_stats(self, interaction: discord.Interaction):
