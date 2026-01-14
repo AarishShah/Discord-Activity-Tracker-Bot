@@ -1,4 +1,5 @@
 from database.connection import Database
+from utils.time_utils import get_ist_time
 
 class UserModel:
     @staticmethod
@@ -19,12 +20,30 @@ class UserModel:
 
     @classmethod
     async def increment_bhai_count(cls, user_id, display_name):
+        now = get_ist_time()
+        year, week, _ = now.isocalendar()
+        week_id = f"{year}-{week}"
+
         await cls.get_collection().update_one(
             {"_id": str(user_id)},
-            {
-                "$inc": {"global_bhai_count": 1},
-                "$set": {"display_name": display_name}
-            },
+            [
+                {
+                    "$set": {
+                        "display_name": display_name,
+                        "global_bhai_count": {"$add": [{"$ifNull": ["$global_bhai_count", 0]}, 1]},
+                        "last_bhai_update": now,
+                        "weekly_bhai_count": {
+                            "$cond": {
+                                "if": {"$eq": ["$week_id", week_id]},
+                                "then": {"$add": [{"$ifNull": ["$weekly_bhai_count", 0]}, 1]},
+                                "else": 1
+                            }
+                        },
+                        "last_weekly_bhai_update": now,
+                        "week_id": week_id
+                    }
+                }
+            ],
             upsert=True
         )
 
@@ -60,8 +79,20 @@ class UserModel:
     @classmethod
     async def get_top_bhai_users(cls, limit=5):
         cursor = cls.get_collection().find({"global_bhai_count": {"$gt": 0}}, {"display_name": 1, "global_bhai_count": 1})\
-                   .sort("global_bhai_count", -1)\
+                   .sort([("global_bhai_count", -1), ("last_bhai_update", 1)])\
                    .limit(limit)
+        return await cursor.to_list(length=limit)
+
+    @classmethod
+    async def get_top_weekly_bhai_users(cls, limit=5):
+        now = get_ist_time()
+        year, week, _ = now.isocalendar()
+        week_id = f"{year}-{week}"
+        
+        cursor = cls.get_collection().find(
+            {"week_id": week_id, "weekly_bhai_count": {"$gt": 0}}, 
+            {"display_name": 1, "weekly_bhai_count": 1}
+        ).sort([("weekly_bhai_count", -1), ("last_weekly_bhai_update", 1)]).limit(limit)
         return await cursor.to_list(length=limit)
 
     @classmethod

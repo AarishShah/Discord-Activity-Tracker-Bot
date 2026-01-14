@@ -32,6 +32,10 @@ class GeneralService:
         return await UserModel.get_top_bhai_users(limit)
 
     @classmethod
+    async def get_top_weekly_bhai_users(cls, limit=5):
+        return await UserModel.get_top_weekly_bhai_users(limit)
+
+    @classmethod
     async def get_bottom_bhai_users(cls, limit=5):
         return await UserModel.get_bottom_bhai_users(limit)
 
@@ -56,6 +60,10 @@ class GeneralService:
                  # Check Leaderboard Before
                  top_before = await UserModel.get_top_bhai_users(limit=1)
                  old_king = top_before[0] if top_before else None
+
+                 # Check Weekly Before
+                 weekly_before = await UserModel.get_top_weekly_bhai_users(limit=1)
+                 old_weekly_king = weekly_before[0] if weekly_before else None
                  
                  # Increment
                  await cls.increment_bhai(message.author.id, message.author.display_name, message.guild.id)
@@ -63,14 +71,20 @@ class GeneralService:
                  # Check Leaderboard After
                  top_after = await UserModel.get_top_bhai_users(limit=1)
                  new_king = top_after[0] if top_after else None
+
+                 # Check Weekly After
+                 weekly_after = await UserModel.get_top_weekly_bhai_users(limit=1)
+                 new_weekly_king = weekly_after[0] if weekly_after else None
                  
-                 # Surpass Logic
-                 if old_king and new_king and old_king['_id'] != new_king['_id']:
-                     # Verify the message author is the new king
-                     if str(new_king['_id']) == str(message.author.id):
-                         old_name = old_king.get('display_name', 'Unknown')
-                         new_name = new_king.get('display_name', 'Unknown')
-                         new_count = new_king.get('global_bhai_count', 0)
+                 # Surpass Logic (Global removed as per request)
+                 # Only Weekly kept below
+
+                 # Weekly Surpass Logic
+                 if old_weekly_king and new_weekly_king and old_weekly_king['_id'] != new_weekly_king['_id']:
+                     if str(new_weekly_king['_id']) == str(message.author.id):
+                         old_name = old_weekly_king.get('display_name', 'Unknown')
+                         new_name = new_weekly_king.get('display_name', 'Unknown')
+                         new_count = new_weekly_king.get('weekly_bhai_count', 0)
                          
                          import random
                          trolls = [
@@ -104,8 +118,8 @@ class GeneralService:
                              f"sudo rm -rf /{old_name} && sudo install {new_name}"
                          ]
                          troll = random.choice(trolls)
-                         
-                         await message.channel.send(f"👑 **LEADERBOARD UPDATE**: **{new_name}** has surpassed **{old_name}** with **{new_count}** searches!\n*{troll}*")
+
+                         await message.channel.send(f"� **WEEKLY LEADERBOARD UPDATE**: **{new_name}** has surpassed **{old_name}**!\n*{troll}*")
         
         # 2. Auto-Reply
         if message.mentions:
