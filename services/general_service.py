@@ -55,7 +55,10 @@ class GeneralService:
         2. Auto-Reply for absent/busy users
         """
         # 1. Bhai Count
-        if "bhai" in message.content.lower():
+        content = message.content.lower()
+        triggers = ["bhai", "bro", "brother"]
+        
+        if any(trigger in content for trigger in triggers):
             if message.guild:
                  # Check Leaderboard Before
                  top_before = await UserModel.get_top_bhai_users(limit=1)
