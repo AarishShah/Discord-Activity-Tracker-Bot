@@ -59,9 +59,11 @@ class Scheduler(commands.Cog):
         
         
         exempt_role_id = os.getenv("AUTO_DROP_EXEMPT_ROLE_ID", "1455827709782397131")
+        auto_drop_time_str = os.getenv("ATTENDANCE_END_TIME", "16:00")
         
         for guild in self.bot.guilds:
             dropped_users = []
+            exempted_users = []
             failed_users = []
             
             for member in guild.members:
@@ -70,6 +72,7 @@ class Scheduler(commands.Cog):
                 # Check for Exempt Role
                 if any(str(role.id) == str(exempt_role_id) for role in member.roles):
                     print(f"[Scheduler] Skipping Auto-Drop for {member.display_name} (Exempt Role).")
+                    exempted_users.append(member.id)
                     continue
                 
                 try:
@@ -77,16 +80,30 @@ class Scheduler(commands.Cog):
                     result = await AttendanceService.auto_drop(member, guild.id)
                     if result['success']:
                         print(f"[Scheduler] {result['message']} (Guild: {guild.name})")
-                        dropped_users.append(member.display_name)
+                        dropped_users.append(member.id)
                 except Exception as e:
                     print(f"[Scheduler] Error auto-dropping {member.display_name}: {e}")
                     failed_users.append(f"{member.display_name} ({str(e)})")
             
-            # Send Notification if users were dropped
-            if dropped_users:
-                user_list_str = ", ".join(dropped_users)
-                message = f"🕰️ **Auto-Drop Summary**: The following users were auto-dropped: {user_list_str}"
+            # Send Notification if users were addressed (dropped or exempted)
+            if dropped_users or exempted_users:
+                date_str = now.strftime('%A, %d %B %Y') # Friday, 23 January 2026
                 
+                message = f"**__Auto-Drop Summary for {date_str}__**\n\n"
+                
+                if dropped_users:
+                    drop_list = "\n".join([f"> - <@{uid}>" for uid in dropped_users])
+                    message += f"> *The following users were auto-dropped: *\n{drop_list}\n\n"
+                    
+                if exempted_users:
+                    exempt_list = "\n".join([f"> - <@{uid}>" for uid in exempted_users])
+                    message += f"> *The following users were exempted from auto-drop: *\n{exempt_list}\n\n"
+                
+                message += "\n***__Information__***\n"
+                message += f"- *This drop occurs automatically from Monday to Friday at {auto_drop_time_str}.*\n"
+                message += "- *The drop happens to inform the teams that you are unavailable.*\n"
+                message += "- *Auto dropped/ Dropped members' time in voice channel is counted as overtime.*"
+
                 # Find Channel
                 channel = get_log_channel(guild)
                      
@@ -96,7 +113,7 @@ class Scheduler(commands.Cog):
                     except Exception as e:
                         print(f"[Scheduler] Failed to send log to channel: {e}")
                 else:
-                    print(f"[Scheduler] No channel found to log auto-drops. (Msg: {message})")
+                    print(f"[Scheduler] No channel found to log auto-drops.")
             
             # Send Notification if failures occurred
             if failed_users:
