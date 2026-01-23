@@ -133,7 +133,7 @@ class Scheduler(commands.Cog):
  
         print(f"[Scheduler] Running Auto-Absent for {now.strftime('%Y-%m-%d')}...")
         today_str = now.strftime('%Y-%m-%d')
-        
+        auto_absent_time_str = os.getenv("ATTENDANCE_AUTO_ABSENT_TIME", "23:30")
         
         for guild in self.bot.guilds:
             absent_users = []
@@ -156,7 +156,7 @@ class Scheduler(commands.Cog):
                             date_str=today_str,
                             reason="Auto-Absent (End of Day)"
                         )
-                        absent_users.append(member.display_name)
+                        absent_users.append(member.id)
                 except Exception as e:
                     print(f"[Scheduler] Error processing {member.display_name}: {e}")
                     failed_users.append(f"{member.display_name} ({str(e)})")
@@ -166,8 +166,23 @@ class Scheduler(commands.Cog):
             # Send Notification
             if absent_users:
                 if channel:
-                    user_list = ", ".join(absent_users)
-                    await channel.send(f"📉 **Auto-Absent Summary**: The following users were marked absent: {user_list}")
+                    date_str = now.strftime('%A, %d %B %Y')
+                    
+                    message = f"** __Auto-Absent Summary for {date_str}__**\n\n"
+                    
+                    absent_list = "\n".join([f"> - <@{uid}>" for uid in absent_users])
+                    message += f"> The following users were marked absent:\n{absent_list}\n\n"
+                    
+                    message += "***__Information__***\n"
+                    message += f"- *This action occurs automatically from Monday to Friday at {auto_absent_time_str}.*\n"
+                    message += "- *This indicates that these members didn't use the `/attendance` command today.* \n"
+                    message += "- *This action is intended for Data consistency.*\n"
+                    message += "- *You can either be `Present`. on `Halfday` or `Absent`. You are not `NULL`. We took care of it :)*"
+                    
+                    try: 
+                        await channel.send(message)
+                    except Exception as e:
+                        print(f"[Scheduler] Failed to send log to channel: {e}")
 
             # Send Failure Notification
             if failed_users:
