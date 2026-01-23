@@ -57,12 +57,20 @@ class Scheduler(commands.Cog):
 
         print(f"[Scheduler] Running Auto-Drop for {now.strftime('%Y-%m-%d')}...")
         
+        
+        exempt_role_id = os.getenv("AUTO_DROP_EXEMPT_ROLE_ID", "1455827709782397131")
+        
         for guild in self.bot.guilds:
             dropped_users = []
             failed_users = []
             
             for member in guild.members:
                 if member.bot: continue
+
+                # Check for Exempt Role
+                if any(str(role.id) == str(exempt_role_id) for role in member.roles):
+                    print(f"[Scheduler] Skipping Auto-Drop for {member.display_name} (Exempt Role).")
+                    continue
                 
                 try:
                     # Attempt Auto Drop
