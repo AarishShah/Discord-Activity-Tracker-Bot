@@ -85,8 +85,7 @@ class GeneralController:
         embed.add_field(name="⚙️ General", value=(
             "`/away [reason]` - Set status to Away\n"
             "`/resume` - Resume activity (Active)\n"
-            "`/bhai-count [user] [leaderboard]` - Check stats or Leaderboard (Top 5, Lower 5, All)\n"
-            "`/update` - (Admin) Sync global stats from history"
+            "`/bhai-count [user] [leaderboard]` - Check stats or Leaderboard (Top 5, Lower 5, All)"
         ), inline=False)
         
         # Export

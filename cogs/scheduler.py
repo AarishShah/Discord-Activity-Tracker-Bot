@@ -10,6 +10,7 @@ from utils.time_utils import get_ist_time, is_weekend
 from services.export_service import ExportService
 from services.google_sheets_service import GoogleSheetsService
 from services.stats_service import StatsService
+from services.maintenance_service import MaintenanceService
 from utils.discord_utils import get_log_channel
 
 def get_scheduler_time(env_key, default_ist):
@@ -34,6 +35,8 @@ TIME_AUTO_DROP = get_scheduler_time("ATTENDANCE_END_TIME", "22:00")
 TIME_SHIFT_START = get_scheduler_time("ATTENDANCE_START_TIME", "09:00")
 # Monthly Stats DM: Default 06:00 IST (Runs on 1st of month)
 TIME_MONTHLY_STATS = get_scheduler_time("MONTHLY_STATS_TIME", "06:00")
+# Weekly Global Stats Maintenance: Default 01:00 IST on Saturday
+TIME_WEEKLY_MAINTENANCE = get_scheduler_time("MAINTENANCE_SYNC_TIME", "01:00")
 
 class Scheduler(commands.Cog):
     def __init__(self, bot):
@@ -43,7 +46,8 @@ class Scheduler(commands.Cog):
         self.auto_drop_task.start()
         self.shift_start_task.start()
         self.monthly_stats_task.start()
-        print(f"[Scheduler] Tasks started. Auto-Absent: {TIME_AUTO_ABSENT}, Export: {TIME_DAILY_EXPORT}, Auto-Drop: {TIME_AUTO_DROP}, Shift-Start: {TIME_SHIFT_START}, Monthly-Stats: {TIME_MONTHLY_STATS}")
+        self.weekly_maintenance_task.start()
+        print(f"[Scheduler] Tasks started. Auto-Absent: {TIME_AUTO_ABSENT}, Export: {TIME_DAILY_EXPORT}, Auto-Drop: {TIME_AUTO_DROP}, Shift-Start: {TIME_SHIFT_START}, Monthly-Stats: {TIME_MONTHLY_STATS}, Weekly-Maintenance: {TIME_WEEKLY_MAINTENANCE}")
 
     def cog_unload(self):
         self.auto_absent_task.cancel()
@@ -51,6 +55,7 @@ class Scheduler(commands.Cog):
         self.auto_drop_task.cancel()
         self.shift_start_task.cancel()
         self.monthly_stats_task.cancel()
+        self.weekly_maintenance_task.cancel()
     
     @tasks.loop(time=TIME_AUTO_DROP)
     async def auto_drop_task(self):
@@ -319,6 +324,28 @@ class Scheduler(commands.Cog):
 
     @monthly_stats_task.before_loop
     async def before_monthly_stats(self):
+        await self.bot.wait_until_ready()
+
+    @tasks.loop(time=TIME_WEEKLY_MAINTENANCE)
+    async def weekly_maintenance_task(self):
+        """
+        Runs daily at TIME_WEEKLY_MAINTENANCE (default 01:00 IST).
+        Executes weekly on Saturday (weekday == 5) to resync global lifetime stats.
+        """
+        now = get_ist_time()
+        # Saturday is weekday 5
+        if now.weekday() != 5:
+            return
+
+        print(f"[Scheduler] Running Weekly Maintenance Task (Global Stats Sync) for {now.strftime('%Y-%m-%d')}...")
+        try:
+            stats = await MaintenanceService.sync_global_stats()
+            print(f"[Scheduler] Weekly Maintenance Complete: Bhai Updates={stats['bhai_updates']}, Voice Updates={stats['voice_updates']}")
+        except Exception as e:
+            print(f"[Scheduler] Weekly Maintenance Error: {e}")
+
+    @weekly_maintenance_task.before_loop
+    async def before_weekly_maintenance(self):
         await self.bot.wait_until_ready()
 
     @auto_absent_task.before_loop

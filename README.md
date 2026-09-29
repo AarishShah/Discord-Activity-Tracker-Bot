@@ -115,7 +115,6 @@ To enable export functionality, you need a Google Service Account:
 
 ### Utility
 *   `/bhai-count [user] [leaderboard]`: Check user stats or view **Top 5 / Lower 5 / All** leaderboard.
-*   `/update`: (Admin) Sync global stats from historical data.
 
 ## Note from Developer
 
