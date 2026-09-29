@@ -17,11 +17,5 @@ class Export(commands.Cog):
     async def csv(self, interaction: discord.Interaction, start_date: str = None, end_date: str = None):
         await ExportController.download_csv(interaction, start_date, end_date)
 
-    @app_commands.command(name="sync", description="Sync activity data to the main Google Sheet tracker")
-    @app_commands.describe(start_date="Start Date (YYYY-MM-DD)", end_date="End Date (YYYY-MM-DD)")
-    async def sync(self, interaction: discord.Interaction, start_date: str = None, end_date: str = None):
-        """Manually trigger the daily sync logic for a specific date range."""
-        await ExportController.export_to_sheets(interaction, start_date, end_date)
-
 async def setup(bot):
     await bot.add_cog(Export(bot))

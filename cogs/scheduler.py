@@ -266,7 +266,7 @@ class Scheduler(commands.Cog):
         target_guild_id = os.getenv("TARGET_GUILD_ID")
         
         now = get_ist_time()
-        yesterday = now - timedelta(days=1)
+        yesterday = (now - timedelta(days=1)).date()
         yesterday_str = yesterday.strftime('%Y-%m-%d')
         
         for guild in self.bot.guilds:
@@ -278,18 +278,63 @@ class Scheduler(commands.Cog):
             channel = get_log_channel(guild)
 
             try:
-                print(f"[Scheduler] Exporting data for {guild.name} ({yesterday_str})...")
-                rows = await ExportService.fetch_activity_data(guild, yesterday_str, yesterday_str)
-                result = await GoogleSheetsService.append_daily_stats(rows, yesterday)
-                
-                if result['success']:
-                    print(f"[Scheduler] Export Success: {result['message']}")
-                    if channel:
+                # 1. Detect missing dates between last recorded date and yesterday
+                missing_dates = await GoogleSheetsService.detect_missing_dates(yesterday)
+                missing_dates_str = [d.strftime('%Y-%m-%d') for d in missing_dates]
+                print(f"[Scheduler] Missing dates detected for {guild.name}: {missing_dates_str}")
+
+                if not missing_dates:
+                    print(f"[Scheduler] Google Sheet is already up to date up to {yesterday_str}.")
+                    continue
+
+                synced_dates = []
+                failed_dates = []
+
+                # Open sheet once to reuse connection across sequential backfill
+                sh = GoogleSheetsService.get_spreadsheet()
+
+                # 2. Sequential chronological backfill
+                for missing_date in missing_dates:
+                    d_str = missing_date.strftime('%Y-%m-%d')
+                    d_obj = datetime(missing_date.year, missing_date.month, missing_date.day)
+                    try:
+                        print(f"[Scheduler] Backfilling data for {guild.name} ({d_str})...")
+                        rows = await ExportService.fetch_activity_data(guild, d_str, d_str)
+                        result = await GoogleSheetsService.append_daily_stats(rows, d_obj, sh=sh)
+                        
+                        if result.get('success'):
+                            synced_dates.append(d_str)
+                            print(f"[Scheduler] Export Success ({d_str}): {result['message']}")
+                        else:
+                            failed_dates.append((d_str, result.get('message', 'Unknown error')))
+                            print(f"[Scheduler] Export Failed ({d_str}): {result.get('message')}")
+                    except Exception as date_err:
+                        print(f"[Scheduler] Error exporting {d_str} for {guild.name}: {date_err}")
+                        failed_dates.append((d_str, str(date_err)))
+
+                # 3. Discord Log Channel Reporting
+                if channel:
+                    if len(synced_dates) == 1 and not failed_dates and synced_dates[0] == yesterday_str:
+                        # Standard single-day export
                         await channel.send(f"📊 **Daily Export**: Data for **{yesterday_str}** has been successfully updated in Google Sheets.")
-                else:
-                     print(f"[Scheduler] Export Failed: {result['message']}")
-                     if channel:
-                        await channel.send(f"⚠️ **Daily Export Failed**: {result['message']}")
+                    elif len(synced_dates) > 1 and not failed_dates:
+                        # Multiple days caught up
+                        await channel.send(
+                            f"✅ **Automated Catch-Up Sync**: Successfully caught up and synced missing dates: "
+                            f"**{synced_dates[0]}** to **{synced_dates[-1]}** ({len(synced_dates)} days)."
+                        )
+                    elif synced_dates and failed_dates:
+                        # Partial backfill success
+                        failed_summary = ", ".join([f"`{d}` ({err})" for d, err in failed_dates])
+                        await channel.send(
+                            f"⚠️ **Automated Catch-Up Sync (Partial)**:\n"
+                            f"• Successfully synced: **{synced_dates[0]}** to **{synced_dates[-1]}** ({len(synced_dates)} days)\n"
+                            f"• Failed dates: {failed_summary}"
+                        )
+                    elif not synced_dates and failed_dates:
+                        # All failed
+                        failed_summary = ", ".join([f"`{d}` ({err})" for d, err in failed_dates])
+                        await channel.send(f"⚠️ **Daily Export / Catch-Up Failed**: Could not sync dates: {failed_summary}")
 
             except Exception as e:
                 print(f"[Scheduler] Error exporting for {guild.name}: {e}")

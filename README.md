@@ -111,7 +111,6 @@ To enable export functionality, you need a Google Service Account:
 
 ### Export
 *   `/csv [start] [end]`: Download Activity Report (Returns 2 CSV files).
-*   `/sync [start] [end]`: Manually trigger sync to the main Google Sheet.
 
 ### Utility
 *   `/bhai-count [user] [leaderboard]`: Check user stats or view **Top 5 / Lower 5 / All** leaderboard.

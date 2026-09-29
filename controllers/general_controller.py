@@ -90,8 +90,7 @@ class GeneralController:
         
         # Export
         embed.add_field(name="📂 Export", value=(
-            "`/csv [start] [end]` - Download Activity Report\n"
-            "`/sync [start] [end]` - Manual Google Sheets Sync"
+            "`/csv [start] [end]` - Download Activity Report"
         ), inline=False)
         
         await interaction.response.send_message(embed=embed, ephemeral=False)
