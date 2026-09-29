@@ -66,6 +66,19 @@ class TestMonthlyStats(unittest.TestCase):
         self.assertEqual(StatsService.format_dynamic_duration(-10), "0 hours")
         self.assertEqual(StatsService.format_dynamic_duration(None), "0 hours")
 
+    def test_is_weekend_friday_saturday(self):
+        from utils.time_utils import is_weekend
+        # 2026-08-20 is Thursday -> False
+        self.assertFalse(is_weekend(datetime(2026, 8, 20)))
+        # 2026-08-21 is Friday -> True
+        self.assertTrue(is_weekend(datetime(2026, 8, 21)))
+        # 2026-08-22 is Saturday -> True
+        self.assertTrue(is_weekend(datetime(2026, 8, 22)))
+        # 2026-08-23 is Sunday -> False (working day)
+        self.assertFalse(is_weekend(datetime(2026, 8, 23)))
+        # 2026-08-24 is Monday -> False (working day)
+        self.assertFalse(is_weekend(datetime(2026, 8, 24)))
+
     def test_format_date(self):
         self.assertEqual(StatsService._format_date("2026-08-10"), "Monday, 10 August 2026")
         self.assertEqual(StatsService._format_date("2026-08-21"), "Friday, 21 August 2026")

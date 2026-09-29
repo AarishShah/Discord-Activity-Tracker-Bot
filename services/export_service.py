@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from models.attendance_model import AttendanceModel
 from models.voice_model import VoiceModel
 from models.user_model import UserModel
+from utils.time_utils import is_weekend
 
 class ExportService:
     @classmethod
@@ -111,7 +112,7 @@ class ExportService:
             # Voice Row
             voice_row = [day_str]
             
-            is_weekend = day.weekday() >= 5
+            is_weekend_day = is_weekend(day)
             
             for uid in sorted_users:
                 # Get Data
@@ -119,7 +120,7 @@ class ExportService:
                 voice_record = voice_map.get(day_str, {}).get(uid)
                 
                 # --- Attendance Logic ---
-                if is_weekend:
+                if is_weekend_day:
                     status = "Holiday"
                 elif att_record:
                     status = att_record.get('attendance_status', 'Absent')

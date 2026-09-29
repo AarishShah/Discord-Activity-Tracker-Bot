@@ -6,7 +6,7 @@ from config.settings import IST
 from services.attendance_service import AttendanceService
 from services.voice_service import VoiceService
 from models.attendance_model import AttendanceModel
-from utils.time_utils import get_ist_time
+from utils.time_utils import get_ist_time, is_weekend
 from services.export_service import ExportService
 from services.google_sheets_service import GoogleSheetsService
 from services.stats_service import StatsService
@@ -56,8 +56,8 @@ class Scheduler(commands.Cog):
     async def auto_drop_task(self):
         now = get_ist_time()
         
-        # Skip Weekends
-        if now.weekday() >= 5:
+        # Skip Weekends (Friday & Saturday)
+        if is_weekend(now):
             return
 
         print(f"[Scheduler] Running Auto-Drop for {now.strftime('%Y-%m-%d')}...")
@@ -105,7 +105,7 @@ class Scheduler(commands.Cog):
                     message += f"> *The following users were exempted from auto-drop: *\n{exempt_list}\n\n"
                 
                 message += "\n***__Information__***\n"
-                message += f"- *This drop occurs automatically from Monday to Friday at {auto_drop_time_str}.*\n"
+                message += f"- *This drop occurs automatically from Sunday to Thursday at {auto_drop_time_str}.*\n"
                 message += "- *The drop happens to inform the teams that you are unavailable.*\n"
                 message += "- *Auto dropped/ Dropped members' time in voice channel is counted as overtime.*"
 
@@ -131,8 +131,8 @@ class Scheduler(commands.Cog):
     async def auto_absent_task(self):
         now = get_ist_time()
         
-        # Skip Weekends (Sat=5, Sun=6)
-        if now.weekday() >= 5:
+        # Skip Weekends (Fri=4, Sat=5)
+        if is_weekend(now):
             print(f"[Scheduler] Skipping Auto-Absent for {now.strftime('%Y-%m-%d')} (Weekend).")
             return
  
@@ -179,7 +179,7 @@ class Scheduler(commands.Cog):
                     message += f"> The following users were marked absent:\n{absent_list}\n\n"
                     
                     message += "***__Information__***\n"
-                    message += f"- *This action occurs automatically from Monday to Friday at {auto_absent_time_str}.*\n"
+                    message += f"- *This action occurs automatically from Sunday to Thursday at {auto_absent_time_str}.*\n"
                     message += "- *This indicates that these members didn't use the `/attendance` command today.* \n"
                     message += "- *This action is intended for Data consistency.*\n"
                     message += "- *You can either be `Present`. on `Halfday` or `Absent`. You are not `NULL`. We took care of it :)*"
@@ -208,8 +208,8 @@ class Scheduler(commands.Cog):
         now = get_ist_time()
         print(f"[Scheduler] Running Shift-Start Check for {now.strftime('%Y-%m-%d')}...")
         
-        # Skip Weekends
-        if now.weekday() >= 5:
+        # Skip Weekends (Friday & Saturday)
+        if is_weekend(now):
             return
 
         switched_users = []

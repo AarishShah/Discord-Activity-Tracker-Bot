@@ -23,7 +23,7 @@ The project follows a layered architecture inspired by Node.js patterns:
 *   **Early Join (Pre-Shift)**: If a user joins a voice channel **before 09:00 AM**, that specific session is tracked as **Overtime**. Once the clock hits 09:00 AM, the session automatically splits, and subsequent time is tracked as Regular hours.
 *   **Regular Hours**: Time spent in voice channels during the day is tracked as Regular Voice Time.
 *   **Overtime (Post-Drop)**: If a user is still in a voice channel after using `/drop` (or being auto-dropped), their status switches to Overtime.
-*   **Weekends**: Any voice activity on Weekends (Sat/Sun) is always tracked as Overtime.
+*   **Weekends**: Any voice activity on Weekends (Fri/Sat) is always tracked as Overtime.
 *   **Global Stats**: The bot maintains a running total of every user's **Global Regular Voice Time** and **Global Overtime**, which persists indefinitely.
 
 ### Automation & Export

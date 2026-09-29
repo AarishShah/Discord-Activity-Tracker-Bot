@@ -1,7 +1,7 @@
 from datetime import datetime
 from models.attendance_model import AttendanceModel
 from services.voice_service import VoiceService
-from utils.time_utils import get_ist_time
+from utils.time_utils import get_ist_time, is_weekend
 
 class AttendanceService:
     
@@ -9,8 +9,8 @@ class AttendanceService:
     async def mark_attendance(cls, user_id, user_name, guild_id, status_value):
         now = get_ist_time()
         
-        if now.weekday() >= 5: # Saturday=5, Sunday=6
-             return {"success": False, "message": "Attendance is disabled on weekends (Saturday & Sunday)."}
+        if is_weekend(now): # Friday=4, Saturday=5
+             return {"success": False, "message": "Attendance is disabled on weekends (Friday & Saturday)."}
 
         # Enforce Today Only
         target_date_str = now.strftime('%Y-%m-%d')
@@ -237,7 +237,7 @@ class AttendanceService:
         if target_date < today_date:
              return {"success": False, "message": "You cannot mark attendance for past dates."}
 
-        if target_date.weekday() >= 5:
+        if is_weekend(target_date):
              return {"success": False, "message": f"{date_str} is a weekend. No need to mark absent."}
 
         # Check existing

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import os
 from models.voice_model import VoiceModel
 from models.user_model import UserModel
-from utils.time_utils import get_ist_time
+from utils.time_utils import get_ist_time, is_weekend
 from models.attendance_model import AttendanceModel
 
 class VoiceService:
@@ -17,8 +17,8 @@ class VoiceService:
         now_ist = get_ist_time()
         is_overtime = False
 
-        # 1. Force Overtime on Weekends
-        if now_ist.weekday() >= 5:
+        # 1. Force Overtime on Weekends (Friday & Saturday)
+        if is_weekend(now_ist):
             is_overtime = True
         else:
             # 2. Check Database for 'Active' Day Status
