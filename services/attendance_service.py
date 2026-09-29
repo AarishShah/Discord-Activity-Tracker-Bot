@@ -17,26 +17,12 @@ class AttendanceService:
         
         # --- Time Restriction for 'Present' ---
         if status_value == "Present":
-            import os
-            from datetime import timedelta
-            
-            # Default 09:00 AM
-            start_time_str = os.getenv("ATTENDANCE_START_TIME", "09:00")
-            limit_mins = int(os.getenv("LATE_LIMIT_MINUTES", "15").strip('"\''))
-            
-            try:
-                # Parse HH:MM
-                st_hour, st_min = map(int, start_time_str.split(':'))
-                start_dt = now.replace(hour=st_hour, minute=st_min, second=0, microsecond=0)
-                limit_dt = start_dt + timedelta(minutes=limit_mins)
-                
-                if now > limit_dt:
-                     return {
-                         "success": False, 
-                         "message": f"⏳ **Late Entry**: It is past {limit_dt.strftime('%I:%M %p')}. You can only mark **Half Day** or **Absent**."
-                     }
-            except ValueError:
-                print("Error parsing ATTENDANCE_START_TIME")
+            if cls.is_past_late_cutoff(now):
+                cutoff_dt = cls.get_late_cutoff_time(now)
+                return {
+                    "success": False, 
+                    "message": f"⏳ **Late Entry**: It is past {cutoff_dt.strftime('%I:%M %p')}. You can only mark **Half Day** or **Absent**."
+                }
 
         # Prepare Command Entry
         command_entry = {
@@ -263,3 +249,44 @@ class AttendanceService:
             }
         )
         return {"success": True, "message": f"Marked as **Absent** on {date_str}: {reason}"}
+
+    @classmethod
+    def get_late_cutoff_time(cls, now=None):
+        """
+        Returns the cutoff datetime for 'Present' attendance on the given date (default: today IST).
+        """
+        import os
+        from datetime import timedelta
+        current = now or get_ist_time()
+        start_time_str = os.getenv("ATTENDANCE_START_TIME", "09:00")
+        limit_mins = int(os.getenv("LATE_LIMIT_MINUTES", "15").strip('"\''))
+        try:
+            st_hour, st_min = map(int, start_time_str.split(':'))
+            start_dt = current.replace(hour=st_hour, minute=st_min, second=0, microsecond=0)
+            return start_dt + timedelta(minutes=limit_mins)
+        except Exception as e:
+            print(f"[AttendanceService] Error parsing cutoff time: {e}")
+            start_dt = current.replace(hour=9, minute=0, second=0, microsecond=0)
+            return start_dt + timedelta(minutes=15)
+
+    @classmethod
+    def is_past_late_cutoff(cls, now=None) -> bool:
+        """
+        Returns True if current time is past the late cutoff limit for 'Present'.
+        """
+        current = now or get_ist_time()
+        cutoff_dt = cls.get_late_cutoff_time(current)
+        return current > cutoff_dt
+
+    @classmethod
+    async def has_marked_attendance_today(cls, user_id, guild_id, now=None) -> bool:
+        """
+        Checks if the user has already marked their attendance status for today.
+        """
+        current = now or get_ist_time()
+        today_str = current.strftime('%Y-%m-%d')
+        record = await AttendanceModel.find_by_date(user_id, guild_id, today_str)
+        if not record:
+            return False
+        status = record.get('attendance_status')
+        return bool(status and status in ['Present', 'Absent', 'joining_mid_day', 'leaving_mid_day', 'Half Day', 'halfday'])

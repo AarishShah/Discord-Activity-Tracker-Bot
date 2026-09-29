@@ -35,3 +35,9 @@ def get_log_channel(guild: discord.Guild):
     target_name = os.getenv("ATTENDANCE_CHANNEL_NAME", "attendance")
     channel = discord.utils.get(guild.text_channels, name=target_name)
     return channel
+
+def get_attendance_channel(guild: discord.Guild):
+    """
+    Finds the designated attendance channel (prioritizes ATTENDANCE_CHANNEL_ID, then ATTENDANCE_CHANNEL_NAME).
+    """
+    return get_log_channel(guild)
