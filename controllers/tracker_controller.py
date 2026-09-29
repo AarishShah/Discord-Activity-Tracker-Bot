@@ -9,6 +9,7 @@ from models.user_model import UserModel
 from utils.time_utils import get_ist_time, is_weekend
 from utils.discord_utils import get_attendance_channel
 from views.attendance_prompt_view import AttendancePromptView
+from services.stats_service import StatsService
 from datetime import datetime, timedelta, timezone
 
 class TrackerController:
@@ -165,21 +166,44 @@ class TrackerController:
         return embed
 
     @staticmethod
-    async def today_stats(interaction: discord.Interaction, user: discord.Member = None):
+    async def get_stats(interaction: discord.Interaction, user: discord.Member = None, preset: str = None, start_date: str = None, end_date: str = None):
         try:
             await interaction.response.defer(ephemeral=False)
             target = user or interaction.user
-            embed = await TrackerController.build_daily_stats_embed(target, interaction.guild)
+            guild = interaction.guild
+
+            # 1. Resolve Date Range
+            start_str, end_str, label, error = StatsService.resolve_date_range(preset, start_date, end_date)
+            if error:
+                await interaction.followup.send(error, ephemeral=False)
+                return
+
+            # 2. Fetch User Stats
+            stats = await StatsService.fetch_user_monthly_stats(guild.id, target.id, start_str, end_str)
+
+            # 3. Add Live Session Duration if current day is included in range
+            now = get_ist_time()
+            today_str = now.strftime('%Y-%m-%d')
+            if start_str <= today_str <= end_str and target.id in VoiceService.active_sessions:
+                session = VoiceService.active_sessions[target.id]
+                if session['guild_id'] == guild.id:
+                    start_time = session['start_time']
+                    current_time = datetime.now(timezone.utc)
+                    live_duration = (current_time - start_time).total_seconds()
+                    if session['is_overtime']:
+                        stats['overtime_seconds'] += live_duration
+                        stats['overtime_formatted'] = StatsService.format_dynamic_duration(stats['overtime_seconds'])
+                    else:
+                        stats['regular_seconds'] += live_duration
+                        stats['regular_formatted'] = StatsService.format_dynamic_duration(stats['regular_seconds'])
+
+            # 4. Build and Send Embed
+            embed = StatsService.build_stats_embed(target, guild, label, stats)
             await interaction.followup.send(embed=embed, ephemeral=False)
-            
+
         except Exception as e:
             import traceback
             traceback.print_exc()
-            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=False)
-            
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=False)
+            await interaction.followup.send(f"❌ Error fetching stats: {str(e)}", ephemeral=False)
 
 

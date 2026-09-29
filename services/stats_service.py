@@ -182,6 +182,119 @@ class StatsService:
         return embed
 
     @classmethod
+    def resolve_date_range(cls, preset: str = None, start_date: str = None, end_date: str = None, reference_date: datetime = None):
+        """
+        Resolves date range and label for /stats based on presets, custom dates, or default.
+        Returns: (start_date_str, end_date_str, period_label, error_message)
+        """
+        now = reference_date or get_ist_time()
+
+        # Priority 1: Custom Dates
+        if start_date or end_date:
+            if start_date and not end_date:
+                end_date = start_date
+            elif end_date and not start_date:
+                start_date = end_date
+
+            try:
+                s_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                e_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                if s_dt > e_dt:
+                    return None, None, None, "❌ Start date cannot be after End date."
+
+                if start_date == end_date:
+                    label = f"{s_dt.strftime('%d-%b-%Y')}"
+                else:
+                    label = f"{start_date} to {end_date}"
+                return start_date, end_date, label, None
+            except ValueError:
+                return None, None, None, "❌ Invalid date format. Please use YYYY-MM-DD."
+
+        # Priority 2: Presets
+        if preset == "current_day":
+            today_str = now.strftime('%Y-%m-%d')
+            label = f"Current Day ({now.strftime('%d-%b-%Y')})"
+            return today_str, today_str, label, None
+
+        elif preset == "yesterday":
+            yesterday = now - timedelta(days=1)
+            y_str = yesterday.strftime('%Y-%m-%d')
+            label = f"Yesterday ({yesterday.strftime('%d-%b-%Y')})"
+            return y_str, y_str, label, None
+
+        elif preset == "current_month":
+            first_day = now.replace(day=1)
+            next_month = now.replace(day=28) + timedelta(days=4)
+            last_day = next_month - timedelta(days=next_month.day)
+            start_str = first_day.strftime('%Y-%m-%d')
+            end_str = last_day.strftime('%Y-%m-%d')
+            label = f"Current Month ({now.strftime('%B %Y')})"
+            return start_str, end_str, label, None
+
+        elif preset == "last_month":
+            start_str, end_str, month_name, _, _ = cls.get_previous_month_range(now)
+            label = f"Last Month ({month_name})"
+            return start_str, end_str, label, None
+
+        # Priority 3: Default State (Last Month)
+        start_str, end_str, month_name, _, _ = cls.get_previous_month_range(now)
+        label = f"Last Month ({month_name})"
+        return start_str, end_str, label, None
+
+    @classmethod
+    def build_stats_embed(cls, user, guild, period_label: str, stats_data: dict, generated_at: datetime = None) -> discord.Embed:
+        """
+        Builds a Discord Embed for stats viewing matching the Task 1 aesthetic.
+        """
+        now = generated_at or get_ist_time()
+        guild_name = guild.name if hasattr(guild, 'name') else str(guild)
+
+        embed = discord.Embed(
+            title=f"Activity & Attendance Stats | {period_label}",
+            description=f"*Showing attendance and voice activity summary for {user.mention} in **{guild_name}**.*",
+            color=5814783  # 0x58B9FF
+        )
+
+        if hasattr(user, 'display_avatar') and user.display_avatar:
+            embed.set_thumbnail(url=user.display_avatar.url)
+        elif hasattr(user, 'avatar') and user.avatar:
+            embed.set_thumbnail(url=user.avatar.url)
+
+        absences = stats_data.get("absences", [])
+        half_days = stats_data.get("half_days", [])
+        regular_formatted = stats_data.get("regular_formatted", "0 hours")
+        overtime_formatted = stats_data.get("overtime_formatted", "0 hours")
+
+        embed.add_field(
+            name=f"Absences ({len(absences)})",
+            value=cls._truncate_field_value(absences),
+            inline=False
+        )
+
+        embed.add_field(
+            name=f"Half Days ({len(half_days)})",
+            value=cls._truncate_field_value(half_days),
+            inline=False
+        )
+
+        embed.add_field(
+            name="Total Voice Time",
+            value=regular_formatted,
+            inline=True
+        )
+
+        embed.add_field(
+            name="Voice Overtime",
+            value=overtime_formatted,
+            inline=True
+        )
+
+        embed.set_footer(text=f"Generated on {now.strftime('%d-%b-%Y %I:%M %p')}")
+        embed.timestamp = now
+
+        return embed
+
+    @classmethod
     async def send_monthly_stats_to_guild(cls, bot: discord.Client, guild: discord.Guild, reference_date: datetime = None):
         """
         Aggregates stats for all non-bot members of the guild and delivers embeds via DM.
