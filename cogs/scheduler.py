@@ -9,6 +9,7 @@ from models.attendance_model import AttendanceModel
 from utils.time_utils import get_ist_time
 from services.export_service import ExportService
 from services.google_sheets_service import GoogleSheetsService
+from services.stats_service import StatsService
 from utils.discord_utils import get_log_channel
 
 def get_scheduler_time(env_key, default_ist):
@@ -31,6 +32,8 @@ TIME_DAILY_EXPORT = get_scheduler_time("ATTENDANCE_EXPORT_TIME", "00:30")
 TIME_AUTO_DROP = get_scheduler_time("ATTENDANCE_END_TIME", "22:00")
 # Shift Start: Default 09:00 IST
 TIME_SHIFT_START = get_scheduler_time("ATTENDANCE_START_TIME", "09:00")
+# Monthly Stats DM: Default 06:00 IST (Runs on 1st of month)
+TIME_MONTHLY_STATS = get_scheduler_time("MONTHLY_STATS_TIME", "06:00")
 
 class Scheduler(commands.Cog):
     def __init__(self, bot):
@@ -39,13 +42,15 @@ class Scheduler(commands.Cog):
         self.daily_export_task.start()
         self.auto_drop_task.start()
         self.shift_start_task.start()
-        print(f"[Scheduler] Tasks started. Auto-Absent: {TIME_AUTO_ABSENT}, Export: {TIME_DAILY_EXPORT}, Auto-Drop: {TIME_AUTO_DROP}, Shift-Start: {TIME_SHIFT_START}")
+        self.monthly_stats_task.start()
+        print(f"[Scheduler] Tasks started. Auto-Absent: {TIME_AUTO_ABSENT}, Export: {TIME_DAILY_EXPORT}, Auto-Drop: {TIME_AUTO_DROP}, Shift-Start: {TIME_SHIFT_START}, Monthly-Stats: {TIME_MONTHLY_STATS}")
 
     def cog_unload(self):
         self.auto_absent_task.cancel()
         self.daily_export_task.cancel()
         self.auto_drop_task.cancel()
         self.shift_start_task.cancel()
+        self.monthly_stats_task.cancel()
     
     @tasks.loop(time=TIME_AUTO_DROP)
     async def auto_drop_task(self):
@@ -285,6 +290,36 @@ class Scheduler(commands.Cog):
                 print(f"[Scheduler] Error exporting for {guild.name}: {e}")
                 if channel:
                     await channel.send(f"⚠️ **Daily Export Error**: {str(e)}")
+
+    @tasks.loop(time=TIME_MONTHLY_STATS)
+    async def monthly_stats_task(self):
+        """
+        Runs daily at TIME_MONTHLY_STATS (06:00 IST by default).
+        Executes on the 1st of each month to send previous month attendance & voice stats via DM.
+        """
+        now = get_ist_time()
+        # Only run on the 1st of each month
+        if now.day != 1:
+            return
+
+        print(f"[Scheduler] Running Monthly Stats DM Task for {now.strftime('%Y-%m-%d')}...")
+        target_guild_id = os.getenv("TARGET_GUILD_ID")
+
+        for guild in self.bot.guilds:
+            if target_guild_id and str(guild.id) != str(target_guild_id):
+                continue
+
+            try:
+                await StatsService.send_monthly_stats_to_guild(self.bot, guild, reference_date=now)
+            except Exception as e:
+                print(f"[Scheduler] Error running monthly stats for {guild.name}: {e}")
+                channel = get_log_channel(guild)
+                if channel:
+                    await channel.send(f"⚠️ **Monthly Stats DM Task Failed**: {str(e)}")
+
+    @monthly_stats_task.before_loop
+    async def before_monthly_stats(self):
+        await self.bot.wait_until_ready()
 
     @auto_absent_task.before_loop
     async def before_auto_absent(self):

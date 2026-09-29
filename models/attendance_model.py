@@ -68,12 +68,16 @@ class AttendanceModel:
         )
 
     @classmethod
-    async def get_logs_in_range(cls, guild_id, start_date, end_date):
-        cursor = cls.get_collection().find({
+    async def get_logs_in_range(cls, guild_id, start_date, end_date, user_id=None):
+        query = {
             "guild_id": guild_id,
             "date": {
                 "$gte": start_date,
                 "$lte": end_date
             }
-        })
+        }
+        if user_id is not None:
+            query["user_id"] = user_id
+            
+        cursor = cls.get_collection().find(query)
         return await cursor.to_list(length=None)
