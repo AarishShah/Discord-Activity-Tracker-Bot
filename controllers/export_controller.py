@@ -40,7 +40,7 @@ class ExportController:
             await interaction.followup.send("❌ An error occurred while generating the CSV.", ephemeral=False)
 
     @staticmethod
-    async def export_to_sheets(interaction: discord.Interaction, start_date: str = None, end_date: str = None, sheet_id: str = None):
+    async def export_to_sheets(interaction: discord.Interaction, start_date: str = None, end_date: str = None):
         await interaction.response.defer(ephemeral=False)
         
         now = get_ist_time()
@@ -65,26 +65,17 @@ class ExportController:
             return
 
         try:
-            import os
             from services.google_sheets_service import GoogleSheetsService
             
-            # If sheet_id is provided, create a NEW worksheet in that sheet
-            if sheet_id:
-                result = await ExportService.generate_sheet_report(interaction.guild, start_date, end_date, sheet_id)
-                if result['success']:
-                    await interaction.followup.send(content=f"📊 **Google Sheet Report Created**\n📅 {start_date} to {end_date}\n🔗 [View Sheet]({result.get('url', '#')})", ephemeral=False)
-                else:
-                    await interaction.followup.send(content=f"❌ Failed to export: {result['message']}", ephemeral=False)
+            # Sync to the MAIN tracker tabs (append logic)
+            data = await ExportService.fetch_activity_data(interaction.guild, start_date, end_date)
+            # Use s_dt for year/month context in append_daily_stats
+            result = await GoogleSheetsService.append_daily_stats(data, s_dt)
+            
+            if result['success']:
+                await interaction.followup.send(content=f"✅ **Sync Success**: Data from {start_date} to {end_date} has been appended to the main tracker.", ephemeral=False)
             else:
-                # If NO sheet_id, sync to the MAIN tracker tabs (append logic)
-                data = await ExportService.fetch_activity_data(interaction.guild, start_date, end_date)
-                # Use s_dt for year/month context in append_daily_stats
-                result = await GoogleSheetsService.append_daily_stats(data, s_dt)
-                
-                if result['success']:
-                    await interaction.followup.send(content=f"✅ **Sync Success**: Data from {start_date} to {end_date} has been appended to the main tracker.", ephemeral=False)
-                else:
-                    await interaction.followup.send(content=f"❌ **Sync Failed**: {result['message']}", ephemeral=False)
+                await interaction.followup.send(content=f"❌ **Sync Failed**: {result['message']}", ephemeral=False)
                     
         except Exception as e:
             import traceback

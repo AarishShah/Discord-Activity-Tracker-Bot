@@ -107,12 +107,11 @@ To enable export functionality, you need a Google Service Account:
 *   `/drop`: End the work day (Sign out).
 
 ### Statistics
-*   `/today [user]`: View daily stats for a specific user.
+*   `/stats [user] [preset] [start_date] [end_date]`: View attendance and activity stats for a user.
 
 ### Export
 *   `/csv [start] [end]`: Download Activity Report (Returns 2 CSV files).
 *   `/sync [start] [end]`: Manually trigger sync to the main Google Sheet.
-*   `/sheet [id] [start] [end]`: Export report to a specific Google Sheet ID/URL.
 
 ### Utility
 *   `/bhai-count [user] [leaderboard]`: Check user stats or view **Top 5 / Lower 5 / All** leaderboard.

@@ -53,38 +53,6 @@ class GoogleSheetsService:
             return sh
 
     @classmethod
-    async def export_to_sheet(cls, sheet_id_or_url, data_payload):
-        """
-        Exports data to a SPECIFIC sheet (manual override).
-        """
-        # Handle split dict - Default to Attendance for manual exports for now
-        rows = []
-        if isinstance(data_payload, dict):
-             rows = data_payload.get('attendance', [])
-        else:
-             rows = data_payload
-             
-        client = cls.get_client()
-        try:
-            if "docs.google.com" in sheet_id_or_url:
-                sh = client.open_by_url(sheet_id_or_url)
-            else:
-                sh = client.open_by_key(sheet_id_or_url)
-        except Exception as e:
-            return {"success": False, "message": f"Failed to open sheet: {str(e)}"}
-
-        import datetime
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        title = f"Report_{timestamp}"
-        
-        try:
-            worksheet = sh.add_worksheet(title=title, rows=len(rows)+10, cols=len(rows[0])+5)
-            worksheet.update(range_name='A1', values=rows)
-            return {"success": True, "message": f"Exported to {title}", "url": f"{sh.url}"}
-        except Exception as e:
-             return {"success": False, "message": f"Failed to export: {str(e)}"}
-
-    @classmethod
     async def append_daily_stats(cls, data_payload, date_obj):
         """
         Appends daily stats to Year-based tabs: '{Year} Attendance' and '{Year} Voice Stats'.

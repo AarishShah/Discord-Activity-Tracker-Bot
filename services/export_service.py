@@ -184,17 +184,3 @@ class ExportService:
              files.append(discord.File(fp=output_voice, filename=f"Voice_Stats_{start_date}_to_{end_date}.csv"))
              
         return files
-
-    @classmethod
-    async def generate_sheet_report(cls, guild, start_date, end_date, sheet_id_or_url):
-        from services.google_sheets_service import GoogleSheetsService
-        
-        data = await cls.fetch_activity_data(guild, start_date, end_date)
-        
-        # NOTE: Manual Export to manual sheet ID needs update?
-        # User only uses this via Command.
-        # This function 'generate_sheet_report' relies on 'export_to_sheet'.
-        # We need to update export_to_sheet to handle dict? Or call it twice?
-        # For now, let's just export Attendance to keep it simple, OR refactor this too.
-        # Let's assume for now commands just get Attendance.
-        return await GoogleSheetsService.export_to_sheet(sheet_id_or_url, data['attendance'])

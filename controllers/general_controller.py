@@ -78,7 +78,7 @@ class GeneralController:
 
         # Statistics
         embed.add_field(name="📊 Statistics", value=(
-            "`/today [user]` - View daily stats"
+            "`/stats [user] [preset] [start_date] [end_date]` - View attendance and activity stats"
         ), inline=False)
         
         # General
@@ -92,8 +92,7 @@ class GeneralController:
         # Export
         embed.add_field(name="📂 Export", value=(
             "`/csv [start] [end]` - Download Activity Report\n"
-            "`/sync [start] [end]` - Manual Google Sheets Sync\n"
-            "`/sheet [id] [start] [end]` - Export to new/specific Sheet"
+            "`/sync [start] [end]` - Manual Google Sheets Sync"
         ), inline=False)
         
         await interaction.response.send_message(embed=embed, ephemeral=False)
